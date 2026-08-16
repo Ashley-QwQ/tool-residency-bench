@@ -58,6 +58,12 @@ class Result:
     log_survival: float = 0.0
     riskiest_reload: float = 0.0  # highest p_i actually reactivated
 
+    # Only populated when CostModel.simulate_failures is on.
+    simulated: bool = False
+    failed_attempts: int = 0
+    retry_tokens: int = 0
+    unrecovered_failures: int = 0
+
     series: list[int] = field(default_factory=list)  # resident tokens per turn
     count_series: list[int] = field(default_factory=list)
 
@@ -65,7 +71,8 @@ class Result:
     def total_tokens(self) -> int:
         """Everything the tool layer costs over the whole session."""
         return (self.resident_token_rent + self.discovery_tokens
-                + self.search_turn_tokens + self.failure_tokens)
+                + self.search_turn_tokens + self.failure_tokens
+                + self.retry_tokens)
 
     @property
     def session_success_prob(self) -> float:
@@ -81,8 +88,18 @@ class Result:
         Only reloads count. Every on-demand policy pays the same first loads,
         so those are common exposure; what differs between policies - and what
         eviction actually spends - is the number of *re*-activations.
+
+        This is the analytic probability of a *clean* session - no attempt
+        failing at all. Under `simulate_failures` with retries, the number
+        that matters instead is `unrecovered_failures`, since a failure that a
+        retry recovers from costs tokens rather than the task.
         """
         return math.exp(self.log_survival)
+
+    @property
+    def completed(self) -> bool:
+        """Simulated runs only: did every reactivation eventually succeed?"""
+        return self.unrecovered_failures == 0
 
     @property
     def mean_resident_tokens(self) -> float:
@@ -99,6 +116,37 @@ class Result:
         return self.premature_reloads / self.loads if self.loads else 0.0
 
 
+def _reactivate(res: Result, cost: CostModel, tool, attempts: dict, policy) -> None:
+    """Draw a reactivation outcome and retry until it works or we give up.
+
+    This is the part v0.2 priced but did not enact. Each failed attempt costs
+    another search round trip; after `retries` exhausted attempts the failure
+    is *unrecovered* and charged `failure_penalty` once.
+
+    What is still missing, and it is the interesting half: an unrecovered
+    failure does not stop the task, re-plan around the missing capability, or
+    look for a different tool that could do the same job. The tool is admitted
+    anyway and the count is reported instead. Modelling the alternatives needs
+    a notion of tools being substitutable for one another, which this
+    simulator deliberately does not have - see docs/reliability.md.
+    """
+    failed = 0
+    while failed <= cost.retries:
+        n = attempts.get(tool.id, 0)
+        attempts[tool.id] = n + 1
+        if not cost.draw_failure(tool, n):
+            policy.on_reactivation(tool.id, failed=False)
+            return
+        failed += 1
+        res.failed_attempts += 1
+        policy.on_reactivation(tool.id, failed=True)
+        if failed <= cost.retries:
+            # A retry is another search round trip for this one tool.
+            res.retry_tokens += cost.discovery_tokens + tool.reactivation_tokens
+    res.unrecovered_failures += 1
+    res.failure_tokens += cost.failure_penalty
+
+
 def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Result:
     cost = cost or CostModel()
     res = Result(workload.name, policy.name, len(workload.steps))
@@ -106,7 +154,9 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
     resident: set[str] = set(policy.start(workload, cost))
     ever_loaded: set[str] = set()
     evicted_at: dict[str, int] = {}
+    attempts: dict[str, int] = {}  # reactivation attempts so far, per tool
     catalog = workload.catalog
+    res.simulated = cost.simulate_failures
 
     # Rent is tracked incrementally rather than re-summed each turn. At a
     # thousand-tool catalog the naive version dominates the runtime of the
@@ -133,10 +183,14 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
                 res.discovery_tokens += catalog[tool].reactivation_tokens
                 if tool in ever_loaded:
                     res.reloads += 1
-                    res.failure_tokens += cost.expected_failure_cost(catalog[tool])
                     p = cost.failure_rate_for(catalog[tool])
                     res.riskiest_reload = max(res.riskiest_reload, p)
                     res.log_survival += math.log1p(-p) if p < 1.0 else -math.inf
+                    if cost.simulate_failures:
+                        _reactivate(res, cost, catalog[tool], attempts, policy)
+                    else:
+                        # Charge the expectation instead of drawing an outcome.
+                        res.failure_tokens += cost.expected_failure_cost(catalog[tool])
                     if t - evicted_at.get(tool, -(10**9)) <= cost.premature_window:
                         res.premature_reloads += 1
                 ever_loaded.add(tool)

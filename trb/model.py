@@ -9,6 +9,7 @@ residency policy and nothing else.
 
 from __future__ import annotations
 
+import hashlib
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -121,12 +122,45 @@ class CostModel:
     failure_rate: float = 0.0
     failure_penalty: int = 0
 
+    # Opt-in: actually draw failures instead of charging their expectation,
+    # so that retries have a control flow rather than a price. Off by default
+    # so every result up to v0.2.1 stays reproducible and deterministic.
+    simulate_failures: bool = False
+    # Retries default to 0 so that the expectation `p_i * L_fail` is exact and
+    # every result up to v0.2.1 is unchanged. Set it and both the priced and
+    # the simulated path account for retries consistently - which they must,
+    # or a policy parameterised from one is being scored against the other.
+    retries: int = 0
+    seed: int = 0
+
     def failure_rate_for(self, tool: Tool) -> float:
         """`p_i` - this tool's own failure rate, or the global one."""
         return self.failure_rate if tool.failure_rate is None else tool.failure_rate
 
     def expected_failure_cost(self, tool: Tool) -> int:
-        return int(self.failure_rate_for(tool) * self.failure_penalty)
+        """Expected extra cost of one reactivation, retries included.
+
+        With `n = retries` further attempts allowed after the first, a tool
+        that fails with probability `p` costs
+
+            sum_{k=1..n} p^k * (retry search)   expected retries
+          + p^(n+1) * failure_penalty           expected unrecovered failure
+
+        The second term is the one that is easy to get wrong. A retry budget
+        does not reduce the failure *rate*, it reduces the rate at which a
+        failure becomes **unrecoverable** - and it does so exponentially. At
+        `p = 0.5` with two retries, the chance of actually losing the tool is
+        0.125, not 0.5. Charging `p * L_fail` there overstates the risk
+        four-fold and makes a policy hold dangerous tools far longer than the
+        world it is being scored in would justify.
+        """
+        p = self.failure_rate_for(tool)
+        if p <= 0.0:
+            return 0
+        retry_cost = self.discovery_tokens + tool.reactivation_tokens
+        expected_retries = sum(p ** k for k in range(1, self.retries + 1))
+        return int(expected_retries * retry_cost
+                   + (p ** (self.retries + 1)) * self.failure_penalty)
 
     def reactivation(self, tool: Tool) -> int:
         """`D_i^eff` - the expected cost of bringing this tool back.
@@ -145,11 +179,40 @@ class CostModel:
             + self.expected_failure_cost(tool)
         )
 
+    def draw_failure(self, tool: Tool, attempt: int) -> bool:
+        """Does this specific reactivation attempt fail?
+
+        Keyed on `(seed, tool id, attempt)` rather than drawn from a running
+        stream, so that two policies see the *same* outcome for the same tool
+        on the same attempt number. Without that, a policy could look better
+        purely because its reloads landed on luckier draws - the classic
+        common-random-numbers correction, and it matters a lot here because
+        the quantity under study is precisely which tools get reloaded.
+
+        BLAKE2b rather than `hash()`, which is salted per interpreter run for
+        strings and would make results irreproducible across processes - and
+        rather than CRC32, which was the first attempt here and was wrong.
+        CRC32 is a linear checksum, not a pseudo-random function: keys
+        differing only in a trailing attempt index produce *correlated*
+        outputs, and consecutive attempts within one retry sequence are
+        exactly such keys. The observable symptom was unrecovered-failure
+        rates of 0.21 and 0.042 where independence demands 0.16 and 0.064.
+        Caught by `test_priced_and_simulated_failure_agree_in_expectation`.
+        """
+        p = self.failure_rate_for(tool)
+        if p <= 0.0:
+            return False
+        key = f"{self.seed}|{tool.id}|{attempt}".encode()
+        digest = hashlib.blake2b(key, digest_size=8).digest()
+        return (int.from_bytes(digest, "big") / 2**64) < p
+
     def label(self) -> str:
         base = f"discovery={self.discovery_tokens}, search_turn={self.search_turn}"
-        if self.failure_rate:
+        if self.failure_rate or self.simulate_failures:
             base += (f", p_fail={self.failure_rate:g}, "
                      f"L_fail={self.failure_penalty:,}")
+        if self.simulate_failures:
+            base += f", simulated retries={self.retries}, seed={self.seed}"
         return base
 
 

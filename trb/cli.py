@@ -318,6 +318,56 @@ def cmd_reliability(args) -> None:
                   f"{r.session_success_prob:.1%} | {r.resident_token_rent:,} |")
 
 
+def cmd_failures(args) -> None:
+    """Draw failures instead of pricing them, and try to *learn* p_i.
+
+    v0.2 charged the expectation of a failure. This enacts it: each attempt
+    is drawn, a failed one is retried up to `--retries` times, and only an
+    exhausted retry budget counts as an unrecovered failure. Draws are keyed
+    on `(seed, tool, attempt)` so every policy meets the same outcome for the
+    same tool - common random numbers, which matters because the quantity
+    under study is exactly *which* tools a policy chooses to reload.
+
+    `adaptive-ski` is the same rule with `p_i` estimated from what it has
+    actually observed rather than handed to it, which is the question v0.2
+    left open: is `p_i` learnable in-session?
+    """
+    workloads = _load(args.workload)
+    specs = args.policy or [
+        "search-only", "ttl-20", "ski-rental", "adaptive-ski", "min-loads",
+    ]
+    for wl in workloads:
+        shaped = (wl if args.failure_profile == "uniform"
+                  else synthetic.apply_failure_profile(
+                      wl, args.failure_profile, args.failure_rate))
+        print(f"\n### {wl.name} - simulated failures, profile "
+              f"{args.failure_profile}, {args.seeds} seeds, "
+              f"retries={args.retries}, L_fail={args.failure_penalty:,}\n")
+        print("| policy | mean total tokens | mean unrecovered failures | "
+              "mean reloads | clean sessions |")
+        print("|---|---|---|---|---|")
+        for s in specs:
+            totals, unrec, reloads, clean = [], [], [], 0
+            for seed in range(args.seeds):
+                cost = CostModel(
+                    discovery_tokens=args.discovery,
+                    search_turn=not args.no_search_turn,
+                    failure_rate=args.failure_rate,
+                    failure_penalty=args.failure_penalty,
+                    simulate_failures=True, retries=args.retries, seed=seed)
+                r = run(shaped, pol.build(s), cost)
+                totals.append(r.total_tokens)
+                unrec.append(r.unrecovered_failures)
+                reloads.append(r.reloads)
+                clean += r.completed
+            n = len(totals)
+            print(f"| {s} | {sum(totals)/n:,.0f} | {sum(unrec)/n:.2f} | "
+                  f"{sum(reloads)/n:.0f} | {clean}/{n} |")
+        print("\nTokens and unrecovered failures are two axes, not one. A "
+              "policy that is cheaper *and* fails more has moved along the "
+              "trade-off, not beaten it.")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="trb", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -362,6 +412,17 @@ def main(argv=None) -> None:
                      choices=list(synthetic.FAILURE_PROFILES),
                      help="how the mean failure rate is spread across tools")
     rel.set_defaults(func=cmd_reliability)
+
+    fl = sub.add_parser("failures", parents=[common],
+                        help="simulate failures and retries; try to learn p_i")
+    fl.add_argument("--discovery", type=int, default=150)
+    fl.add_argument("--failure-rate", type=float, default=0.01)
+    fl.add_argument("--failure-penalty", type=int, default=100000)
+    fl.add_argument("--retries", type=int, default=2)
+    fl.add_argument("--seeds", type=int, default=40)
+    fl.add_argument("--failure-profile", default="persistent",
+                    choices=list(synthetic.FAILURE_PROFILES))
+    fl.set_defaults(func=cmd_failures)
 
     p = sub.add_parser("pareto", parents=[common],
                        help="rent vs. reactivations, with no exchange rate assumed")

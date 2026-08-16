@@ -141,6 +141,7 @@ python -m trb run -w burst -p search-only -p ttl-5 -p min-loads -p rent-optimal
 python -m trb sweep       -w long_tail  # optimality gap vs. reactivation price
 python -m trb pareto      -w long_tail  # the trade-off with no price assumed
 python -m trb reliability -w long_mixed --failure-profile persistent
+python -m trb failures    -w long_mixed  # draw failures + retries, learn p_i
 python -m trb robustness --seeds 300    # the claims on random workloads
 python tests/test_simulator.py        # invariants
 python tests/test_optimality.py       # brute-force validation of the optimum
@@ -184,6 +185,7 @@ from the code.
 | `lru-N` | keep at most N tools | the reflex answer |
 | `no-cache` | drop everything not used this turn | maximally aggressive; the thrash control |
 | `ski-rental` | hold `ceil(D/S)-1` idle turns, then drop | **the strong online baseline**: 2-competitive, and provably the best any cost-only policy can be |
+| `adaptive-ski` | ski-rental with `p_i` estimated, not given | tests whether per-tool risk is learnable in-session (it is not) |
 | `oracle-N` | drop what is not needed within N turns | *offline heuristic* — arbitrary horizon, not an optimum |
 | `min-loads` | never drop anything ever needed again | Belady's MIN: **optimal for miss count** |
 | `rent-optimal` | drop iff `schema × idle turns > D_i` | **optimal for rent + reactivation** |
@@ -470,10 +472,16 @@ Read these before quoting any number above.
   + failure recovery      retry, re-plan, escalate         NOT modelled
   ```
 
-- **A failed reactivation is priced, not simulated.** There is no retry, no
-  re-planning around the missing capability, and no fallback to a different
-  tool. A real agent would do all three, and `p_i` is an input here rather
-  than something measured.
+- **A failed reactivation stops nothing.** Retries *are* simulated
+  (`trb failures`), but an unrecovered failure is counted and charged rather
+  than ending the task, and there is no re-planning around the missing
+  capability and no fallback to a substitutable tool. The simulator has no
+  notion of two tools doing the same job, which is what those would need.
+- **`p_i` is an input.** It can be estimated in-session (`adaptive-ski`) and
+  doing so is measurably *worse* than being told — same token cost, 64% more
+  unrecovered failures. The obstacle is structural: evidence that a tool is
+  dangerous is only purchasable by being harmed by it, and a tool correctly
+  held forever never yields another observation.
 - **RTR is logical context occupancy, not compute.** This is the caveat most
   likely to be mistaken for a claim it is not making. **15M token-turns does
   not mean 15M extra tokens were processed.** With prompt caching, KV reuse,
@@ -558,18 +566,27 @@ a benchmark, not a framework, and complete as that:
 + stated falsification criteria
 ```
 
-**v0.2 — pricing failure.** Landed: `trb reliability`, and
-[`docs/reliability.md`](docs/reliability.md). This is where the v0.1 framing
-turned out to be looking in the wrong place — see findings 8 and 9. Still open
-for v0.2:
+**v0.2 — pricing and then enacting failure.** `trb reliability`, `trb
+failures`, and [`docs/reliability.md`](docs/reliability.md). Per-tool `p_i`,
+simulated retries, and an in-session `p_i` estimator that is shown not to
+work. Two corrections came out of building it, both caught by consistency
+tests rather than by inspection: a retry budget makes failure unrecoverable at
+`p^(n+1)` rather than `p`, so pricing it as `p·L_fail` overstates risk
+four-fold at `p=0.5` with two retries; and the first random source was CRC32,
+a linear checksum whose correlated outputs on consecutive attempt indices
+produced measurably wrong failure rates.
 
-- **Measuring `p_i` rather than assuming it.** Per-tool failure rates are
-  modelled and they change the conclusion (finding 10), but nothing here
-  estimates them. The cheapest source is the harness itself: record whether a
-  re-search found what it went looking for, and `p_i` falls out of the logs.
-- **Failure recovery.** A failed reactivation currently just costs tokens.
-  Retry, re-plan, and fallback-to-another-tool are all missing, and they are
-  what determines whether a failure is an annoyance or the end of the task.
+This is where the v0.1 framing turned out to be looking in the wrong place —
+see findings 8, 9 and 10. Still open:
+
+- **A `p_i` source that is not the agent's own scars.** In-session learning
+  is implemented and shown not to work; description quality, catalog
+  ambiguity, and a cross-session failure log are the candidates, and all three
+  need a real catalog to try.
+- **Substitutable tools.** Retries are simulated, but re-planning and
+  falling back to a different tool that does the same job are not, because
+  the simulator has no notion of two tools being interchangeable. That is
+  what decides whether a failure is an annoyance or the end of the task.
 - **The selection budget.** Where tool-call error rate actually starts
   climbing for an 8B–30B local model as resident tool count grows. Anthropic's
   30–50 figure is for a frontier model; a smaller one is almost certainly

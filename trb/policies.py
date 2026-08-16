@@ -49,6 +49,13 @@ class Policy:
         for tool in used:
             self._last_use[tool] = t
 
+    def on_reactivation(self, tool_id: str, failed: bool) -> None:
+        """Outcome of one reactivation attempt. Only fires under simulation.
+
+        This is the only channel through which a policy can *learn* anything
+        about `p_i` rather than being told it.
+        """
+
     def __init__(self) -> None:
         self._last_use: dict[str, int] = {}
 
@@ -166,6 +173,66 @@ class SkiRental(Policy):
             # to evict immediately, and testing `idle` alone would instead
             # hold for one turn and pay S + D against an optimum of D.
             if tool.schema_tokens * (idle + 1) >= self._cost.reactivation(tool):
+                drop.add(x)
+        return drop
+
+
+class AdaptiveSkiRental(SkiRental):
+    """Ski rental that estimates `p_i` from observed outcomes instead of
+
+    being handed it. Beta-Bernoulli with a Laplace prior:
+
+        p_hat_i = (failures_i + alpha) / (attempts_i + alpha + beta)
+
+    and then the ordinary ski-rental threshold on `D_i(p_hat_i)`.
+
+    It exists to answer a question the v0.2 write-up raised and could not
+    settle: `p_i` was an *input*, so is it learnable? Partly. The catch is
+    structural rather than statistical, and it shows up immediately in the
+    numbers: **the only way to observe that a tool is dangerous is to reload
+    it and get burned.** Every unit of evidence about `p_i` is bought at the
+    price of exactly the event the estimate exists to avoid, and a tool held
+    forever - correctly - never produces another observation.
+
+    That is an argument against learning `p_i` online at all, and for getting
+    it from somewhere cheaper: description quality, catalog ambiguity, or a
+    harness log shared across sessions rather than one agent's own scars.
+    """
+
+    name = "adaptive-ski"
+
+    def __init__(self, alpha: float = 1.0, beta: float = 4.0) -> None:
+        super().__init__()
+        self.alpha, self.beta = alpha, beta
+        self._fail: dict[str, int] = {}
+        self._tries: dict[str, int] = {}
+
+    def on_reactivation(self, tool_id: str, failed: bool) -> None:
+        self._tries[tool_id] = self._tries.get(tool_id, 0) + 1
+        if failed:
+            self._fail[tool_id] = self._fail.get(tool_id, 0) + 1
+
+    def estimate(self, tool_id: str) -> float:
+        f, n = self._fail.get(tool_id, 0), self._tries.get(tool_id, 0)
+        return (f + self.alpha) / (n + self.alpha + self.beta)
+
+    def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
+        if self._cost is None:
+            return set()
+        c = self._cost
+        drop = set()
+        for x in resident:
+            tool = workload.catalog[x]
+            idle = t - self._last_use.get(x, t)
+            # Mirror CostModel.expected_failure_cost with p_hat in place of
+            # p_i, so the estimator and the oracle differ only in what they
+            # know - not in how they price what they know.
+            p = self.estimate(x)
+            retry_cost = c.discovery_tokens + tool.reactivation_tokens
+            d_hat = (retry_cost
+                     + sum(p ** k for k in range(1, c.retries + 1)) * retry_cost
+                     + (p ** (c.retries + 1)) * c.failure_penalty)
+            if tool.schema_tokens * (idle + 1) >= d_hat:
                 drop.add(x)
         return drop
 
@@ -322,6 +389,7 @@ ALIASES = {
     "search-only": "search",
     "no-cache": "nocache",
     "ski-rental": "ski",
+    "adaptive-ski": "adaptive",
     "min-loads": "minloads",
     "belady-min": "minloads",
     "belady": "minloads",
@@ -339,6 +407,7 @@ def build(spec: str) -> Policy:
         "search": lambda: SearchOnly(),
         "nocache": lambda: NoCache(),
         "ski": lambda: SkiRental(),
+        "adaptive": lambda: AdaptiveSkiRental(),
         "minloads": lambda: MinLoads(),
         "rentoptimal": lambda: RentOptimal(),
         "ttl": lambda: TTL(int(arg or 10)),

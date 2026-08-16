@@ -321,6 +321,107 @@ def test_reliability_and_token_cost_rank_policies_differently():
     assert loads.session_success_prob == 1.0, "min-loads never reloads"
 
 
+def test_priced_and_simulated_failure_agree_in_expectation():
+    """The two failure paths must describe the same world.
+
+    `expected_failure_cost` is what policies are parameterised from;
+    `simulate_failures` is what they are scored in. If those disagree, a
+    policy is being optimised against one world and graded in another - which
+    is exactly what happened when retries were simulated but the expectation
+    still charged `p * L_fail`, four-fold overstating the risk at p=0.5 with
+    two retries and making the oracle policy hold dangerous tools far too
+    long.
+    """
+    steps = ([Step(("a",))] + [Step(("b",))] * 6) * 30
+    catalog = {"a": Tool("a", 900, failure_rate=0.4),
+               "b": Tool("b", 900, failure_rate=0.0)}
+    wl = Workload("risk", "", catalog, steps)
+
+    for retries in (0, 1, 2):
+        priced = CostModel(failure_penalty=50_000, retries=retries)
+        analytic = run(wl, pol.NoCache(), priced)
+        per_reload = analytic.failure_tokens / max(analytic.reloads, 1)
+
+        drawn = []
+        for seed in range(400):
+            cost = CostModel(failure_penalty=50_000, retries=retries,
+                             simulate_failures=True, seed=seed)
+            r = run(wl, pol.NoCache(), cost)
+            drawn.append((r.failure_tokens + r.retry_tokens) / max(r.reloads, 1))
+        empirical = sum(drawn) / len(drawn)
+
+        assert abs(empirical - per_reload) <= 0.15 * max(per_reload, 1), (
+            f"retries={retries}: priced {per_reload:,.0f} per reload but "
+            f"simulated {empirical:,.0f} - the two paths disagree"
+        )
+
+
+def test_retries_reduce_unrecovered_failures_exponentially():
+    """A retry budget does not lower the failure rate, it lowers the rate at
+
+    which a failure becomes unrecoverable - and by `p` per retry, not
+    linearly. Getting this wrong is what made the expectation overstate risk.
+    """
+    # Both tools risky, so every reload is an exposed one and the rate is
+    # `unrecovered / reloads` without needing per-tool reload counts.
+    steps = ([Step(("a",))] + [Step(("b",))] * 6) * 40
+    catalog = {"a": Tool("a", 900, failure_rate=0.5),
+               "b": Tool("b", 900, failure_rate=0.5)}
+    wl = Workload("risk", "", catalog, steps)
+
+    rates = []
+    for retries in (0, 1, 2):
+        lost = tries = 0
+        for seed in range(80):
+            cost = CostModel(failure_penalty=0, retries=retries,
+                             simulate_failures=True, seed=seed)
+            r = run(wl, pol.NoCache(), cost)
+            lost += r.unrecovered_failures
+            tries += r.reloads
+        rates.append(lost / tries)
+    # 0.5, 0.25, 0.125 give or take sampling noise.
+    for retries, observed in enumerate(rates):
+        assert abs(observed - 0.5 ** (retries + 1)) < 0.05, (
+            f"retries={retries}: unrecovered rate {observed:.3f}, "
+            f"expected about {0.5 ** (retries + 1):.3f}"
+        )
+
+
+def test_simulated_failures_are_reproducible_and_policy_independent():
+    """Same tool, same attempt number, same outcome - common random numbers.
+
+    Without this, one policy could beat another purely on luckier draws.
+    """
+    tool = Tool("a", 900, failure_rate=0.5)
+    cost = CostModel(simulate_failures=True, seed=3)
+    first = [cost.draw_failure(tool, n) for n in range(20)]
+    assert first == [cost.draw_failure(tool, n) for n in range(20)]
+    assert first != [CostModel(simulate_failures=True, seed=4).draw_failure(tool, n)
+                     for n in range(20)]
+
+
+def test_learning_p_i_requires_being_harmed_by_it():
+    """The structural obstacle to estimating p_i online, as an assertion.
+
+    A tool the policy correctly refuses to evict generates no observations,
+    so its estimate never moves off the prior. Evidence about danger is only
+    purchasable by incurring the danger.
+    """
+    steps = ([Step(("a",))] + [Step(("b",))] * 6) * 20
+    catalog = {"a": Tool("a", 900, failure_rate=0.9),
+               "b": Tool("b", 900, failure_rate=0.0)}
+    wl = Workload("risk", "", catalog, steps)
+
+    p = pol.AdaptiveSkiRental()
+    prior = p.estimate("a")
+    run(wl, p, CostModel(failure_penalty=10**9, retries=0,
+                         simulate_failures=True, seed=1))
+    assert p.estimate("a") == prior, (
+        "a tool that is never evicted yields no evidence, so the estimate "
+        "cannot improve - which is the whole difficulty"
+    )
+
+
 if __name__ == "__main__":
     passed = 0
     for name, fn in sorted(globals().items()):
