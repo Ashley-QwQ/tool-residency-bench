@@ -1,0 +1,422 @@
+{
+  "name": "late_reuse",
+  "description": "A tool is used three times, sits idle for 100 turns, then is needed once more. 'It will be needed again' is true here and is still not a reason to keep it: the question is whether 100 turns of rent is cheaper than one re-search. This trace is where the discovery-cost knob actually decides the answer - sweep it.",
+  "steps": [
+    {
+      "tool": "db_schema",
+      "phase": "setup"
+    },
+    {
+      "tool": "db_schema",
+      "phase": "setup"
+    },
+    {
+      "tool": "db_schema",
+      "phase": "setup"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "http_get",
+      "phase": "collect"
+    },
+    {
+      "tool": "db_schema",
+      "phase": "teardown"
+    }
+  ]
+}

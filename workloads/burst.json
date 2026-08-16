@@ -1,0 +1,122 @@
+{
+  "name": "burst",
+  "description": "Grayscale 26 images, then post one, then search, then notify. The grayscale tool is by a wide margin the most recently and most frequently used tool in the trace at the moment it becomes dead weight. Recency and frequency both point exactly the wrong way here, which is why LRU and LFU cannot be the whole answer.",
+  "steps": [
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "img_grayscale",
+      "phase": "process_images"
+    },
+    {
+      "tool": "instagram_upload",
+      "phase": "publish"
+    },
+    {
+      "tool": "web_search",
+      "phase": "research"
+    },
+    {
+      "tool": "discord_send",
+      "phase": "notify"
+    }
+  ]
+}

@@ -1,0 +1,326 @@
+{
+  "name": "alternating",
+  "description": "Two tools, strictly interleaved, 80 turns. The trap for eviction policies that are too eager: evicting on last use turns every single turn into a cache miss. Aggressive eviction is not free, and this is the trace that proves it.",
+  "steps": [
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "compare"
+    },
+    {
+      "tool": "db_query",
+      "phase": "compare"
+    }
+  ]
+}

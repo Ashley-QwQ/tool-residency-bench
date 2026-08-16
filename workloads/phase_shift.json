@@ -1,0 +1,198 @@
+{
+  "name": "phase_shift",
+  "description": "download -> process -> upload -> report, twelve turns each. The natural shape of most long agent tasks. A good working set walks [A] -> [B] -> [C] -> [D]; monotonic loading walks [A] -> [A B] -> [A B C] -> [A B C D] and pays for every phase it has already finished.",
+  "steps": [
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "video_download",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "download"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "video_transcode",
+      "phase": "process"
+    },
+    {
+      "tool": "img_watermark",
+      "phase": "process"
+    },
+    {
+      "tool": "img_watermark",
+      "phase": "process"
+    },
+    {
+      "tool": "img_watermark",
+      "phase": "process"
+    },
+    {
+      "tool": "img_watermark",
+      "phase": "process"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_upload",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_list_buckets",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_list_buckets",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_list_buckets",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_list_buckets",
+      "phase": "upload"
+    },
+    {
+      "tool": "cloud_list_buckets",
+      "phase": "upload"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "report_render",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    },
+    {
+      "tool": "chart_plot",
+      "phase": "report"
+    }
+  ]
+}

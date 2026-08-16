@@ -1,0 +1,53 @@
+{
+  "description": "A plausible multi-server workstation catalog. Schema token counts are hand-estimated from real MCP tool definitions (name + description + JSON schema + argument docs) and span the realistic range: a terse filesystem tool is a few hundred tokens, a cloud or database tool with a deeply nested schema is well over a thousand. Total is in the same ballpark as the ~55k-token five-server setup Anthropic cites as typical.",
+  "tools": [
+    {"id": "fs_read",            "server": "fs",       "schema_tokens": 210},
+    {"id": "fs_write",           "server": "fs",       "schema_tokens": 260},
+    {"id": "fs_list_dir",        "server": "fs",       "schema_tokens": 180},
+    {"id": "fs_glob",            "server": "fs",       "schema_tokens": 240},
+    {"id": "fs_move",            "server": "fs",       "schema_tokens": 200},
+    {"id": "fs_delete",          "server": "fs",       "schema_tokens": 190},
+    {"id": "shell_run",          "server": "shell",    "schema_tokens": 430},
+    {"id": "shell_which",        "server": "shell",    "schema_tokens": 150},
+    {"id": "proc_list",          "server": "shell",    "schema_tokens": 220},
+
+    {"id": "img_grayscale",      "server": "image",    "schema_tokens": 700},
+    {"id": "img_resize",         "server": "image",    "schema_tokens": 820},
+    {"id": "img_crop",           "server": "image",    "schema_tokens": 760},
+    {"id": "img_exif_read",      "server": "image",    "schema_tokens": 540},
+    {"id": "img_watermark",      "server": "image",    "schema_tokens": 910},
+    {"id": "img_convert",        "server": "image",    "schema_tokens": 680},
+    {"id": "video_transcode",    "server": "image",    "schema_tokens": 1450},
+    {"id": "video_download",     "server": "image",    "schema_tokens": 1120},
+
+    {"id": "http_get",           "server": "http",     "schema_tokens": 380},
+    {"id": "http_post",          "server": "http",     "schema_tokens": 520},
+    {"id": "web_search",         "server": "search",   "schema_tokens": 340},
+    {"id": "web_fetch_page",     "server": "search",   "schema_tokens": 460},
+    {"id": "image_search",       "server": "search",   "schema_tokens": 410},
+
+    {"id": "instagram_upload",   "server": "social",   "schema_tokens": 1240},
+    {"id": "instagram_comment",  "server": "social",   "schema_tokens": 880},
+    {"id": "discord_send",       "server": "social",   "schema_tokens": 950},
+    {"id": "discord_upload",     "server": "social",   "schema_tokens": 1080},
+    {"id": "slack_post",         "server": "social",   "schema_tokens": 1010},
+    {"id": "mail_send",          "server": "social",   "schema_tokens": 1170},
+
+    {"id": "db_query",           "server": "db",       "schema_tokens": 1380},
+    {"id": "db_schema",          "server": "db",       "schema_tokens": 640},
+    {"id": "db_insert",          "server": "db",       "schema_tokens": 1290},
+    {"id": "db_migrate",         "server": "db",       "schema_tokens": 1620},
+
+    {"id": "cloud_upload",       "server": "cloud",    "schema_tokens": 1550},
+    {"id": "cloud_list_buckets", "server": "cloud",    "schema_tokens": 720},
+    {"id": "cloud_deploy",       "server": "cloud",    "schema_tokens": 1810},
+    {"id": "cloud_logs",         "server": "cloud",    "schema_tokens": 990},
+
+    {"id": "cal_list_events",    "server": "calendar", "schema_tokens": 830},
+    {"id": "cal_create_event",   "server": "calendar", "schema_tokens": 1160},
+    {"id": "notes_append",       "server": "notes",    "schema_tokens": 350},
+    {"id": "notes_search",       "server": "notes",    "schema_tokens": 420},
+    {"id": "report_render",      "server": "notes",    "schema_tokens": 1240},
+    {"id": "chart_plot",         "server": "notes",    "schema_tokens": 1330}
+  ]
+}

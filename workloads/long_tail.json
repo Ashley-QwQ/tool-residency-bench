@@ -1,0 +1,966 @@
+{
+  "name": "long_tail",
+  "description": "Two workhorse tools carry the task, interrupted every so often by a one-off specialist that is never needed again. This is the everyday shape of a long session, and it is what makes monotonic loading fail slowly enough that nobody notices until the context is full.",
+  "steps": [
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "img_exif_read",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "img_crop",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "img_convert",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "cal_list_events",
+      "phase": "detour"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "cal_create_event",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "notes_search",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "mail_send",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "slack_post",
+      "phase": "detour"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "instagram_comment",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "db_migrate",
+      "phase": "detour"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "fs_read",
+      "phase": "work"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "work"
+    }
+  ]
+}

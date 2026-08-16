@@ -1,0 +1,18 @@
+{
+  "name": "short",
+  "description": "A two-tool errand. Nothing accumulates and nothing needs managing. This trace exists to check the opposite claim from the rest of the suite: residency management must not make small tasks worse. Any policy that loses here is disqualified regardless of how well it does on the long traces.",
+  "steps": [
+    {
+      "tool": "fs_read",
+      "phase": "inspect"
+    },
+    {
+      "tool": "fs_write",
+      "phase": "edit"
+    },
+    {
+      "tool": "shell_run",
+      "phase": "verify"
+    }
+  ]
+}
