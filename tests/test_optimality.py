@@ -218,6 +218,54 @@ def test_tools_do_not_compete_so_the_optimum_is_separable():
         assert joint == parts, f"{wl.name}: {joint:,} != sum of parts {parts:,}"
 
 
+def test_ski_rental_is_two_competitive():
+    """The competitive bound, checked rather than cited.
+
+    Ski rental's guarantee is 2x the offline optimum. It is claimed in the
+    README and in docs/problem.md as the thing a semantic policy has to beat,
+    so it is worth checking on workloads nobody designed rather than only on
+    the seven that were.
+
+    Checked under the Proposition's cost model, which is where the bound is
+    actually stated - search-turn rent charges an idle turn twice and is not
+    part of the ski-rental correspondence.
+    """
+    from trb import synthetic
+
+    worst, worst_seed = 0.0, None
+    for seed in range(300):
+        wl = synthetic.sample_workload(seed)
+        opt = run(wl, pol.RentOptimal(), DECOUPLED).total_tokens
+        ski = run(wl, pol.SkiRental(), DECOUPLED).total_tokens
+        if opt and ski / opt > worst:
+            worst, worst_seed = ski / opt, seed
+    assert worst <= 2.0, (
+        f"ski-rental hit {worst:.3f}x the optimum on seed {worst_seed}, "
+        "which breaks the 2-competitive guarantee - the eviction threshold is "
+        "wrong, not the bound"
+    )
+
+
+def test_reliability_and_token_cost_rank_policies_differently():
+    """The v0.2 finding, as an assertion rather than a paragraph.
+
+    Token cost grows linearly in reactivations; session completion probability
+    decays geometrically in them. If these two ever agreed on a ranking, the
+    reliability document would be describing something that does not happen.
+    """
+    from trb import load_all
+
+    workloads = Path(__file__).resolve().parent.parent / "workloads"
+    wl = next(w for w in load_all(workloads) if w.name == "long_mixed")
+    cost = CostModel(failure_rate=0.01, failure_penalty=0)
+    ski = run(wl, pol.SkiRental(), cost)
+    loads = run(wl, pol.MinLoads(), cost)
+
+    assert ski.total_tokens < loads.total_tokens, "ski-rental should win on tokens"
+    assert ski.session_success_prob < 0.01, "and be unusable on reliability"
+    assert loads.session_success_prob == 1.0, "min-loads never reloads"
+
+
 if __name__ == "__main__":
     passed = 0
     for name, fn in sorted(globals().items()):

@@ -133,6 +133,52 @@ heuristic happened to be in the table. A test asserts that no policy in the
 suite ever beats `rent-optimal`; if one ever did, the closed form above would
 be wrong.
 
+### The online problem is ski rental, and that is a limit not a technique
+
+The Proposition has a second consequence, and it is the more useful one.
+
+An online policy does not know `g`. Strip a single idle gap down to what it
+actually has to decide and the structure is exact: pay `S_i` per turn to keep
+renting the tool, or `D_i` once to settle the matter and fetch it again later.
+That is **ski rental**, with daily rent `S_i` and purchase price `D_i`. The
+correspondence is not an analogy — it is the same decision.
+
+Two things follow immediately, and the second matters more than the first.
+
+**An algorithm.** Rent until cumulative rent would exceed the purchase price,
+then buy: hold for `⌈D_i / S_i⌉ − 1` idle turns, then evict. This is
+2-competitive per gap, and because the Proposition says gaps are independent, a
+per-gap guarantee is a whole-session guarantee. It ships as `ski-rental`.
+
+**A barrier.** Ski rental's deterministic competitive ratio has a matching
+lower bound of 2: no deterministic online algorithm can do better in the worst
+case, and our problem *contains* ski rental as the special case of one tool
+and one gap, so the bound transfers directly. Randomisation lowers it to
+`e/(e−1) ≈ 1.58`, and no further.
+
+That barrier is the point. It says:
+
+> Within this cost model, **no amount of cleverness about cost gets below 2x
+> (or 1.58x randomised)**. The only way through the barrier is information the
+> cost model does not contain — knowing something about `g` itself.
+
+Which is precisely what task semantics is: a phase boundary, a completed plan
+item, a materialised artifact are all statements about `g`. So the research
+question for a semantic policy is no longer the vague "can we do better than
+LRU" (yes, trivially) but the sharp one:
+
+> How much of the gap between 2x and 1x does task structure actually buy?
+
+And the measured answer so far is uncomfortable for the semantic thesis, which
+is worth saying plainly: `ski-rental` — which knows nothing whatsoever about
+the task — comes in at a **median 1.13x** of the offline optimum across 300
+random workloads, and **1.04x** on `long_mixed`. On token cost alone there is
+almost nothing left for semantics to win.
+
+The value of semantics turns out to live somewhere else entirely, and only
+becomes visible once reactivation is allowed to fail. See
+[`docs/reliability.md`](reliability.md).
+
 The full objective a real policy would have to minimise has one more term than
 either the 2012 rental model or this simulator:
 

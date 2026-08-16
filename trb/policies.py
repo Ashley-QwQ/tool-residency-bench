@@ -122,6 +122,54 @@ class LRU(Policy):
         return set(ranked[: len(resident) - self.capacity])
 
 
+class SkiRental(Policy):
+    """Hold until accumulated rent equals the cost of getting the tool back.
+
+    Per tool: `T_i = D_i / S_i` idle turns, then evict. This is not a new idea
+    dressed up - it is literally the ski-rental rule, and the correspondence
+    is exact. Each idle gap is a ski-rental instance: pay `S_i` per turn to
+    keep renting, or `D_i` once to settle the matter. The Proposition in
+    docs/problem.md says the gaps are independent, so a per-gap guarantee is a
+    whole-session guarantee.
+
+    That makes this the strongest baseline obtainable **without knowing
+    anything about the task**: 2-competitive, matching the known deterministic
+    lower bound for ski rental. It is included precisely so that a future
+    semantic policy has something real to beat. Beating LRU proves nothing;
+    beating this means task structure bought something the cost model could
+    not derive on its own.
+    """
+
+    name = "ski-rental"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._cost: CostModel | None = None
+
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
+        self._cost = cost
+        return set()
+
+    def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
+        if self._cost is None:
+            return set()
+        drop = set()
+        for x in resident:
+            tool = workload.catalog[x]
+            idle = t - self._last_use.get(x, t)
+            # Ski rental buys on day ceil(D/S), i.e. rents ceil(D/S) - 1 days:
+            # never let cumulative rent pass the purchase price. Hence the
+            # `idle + 1` - the test is on the rent the *next* turn would add,
+            # not the rent already paid. The off-by-one is not cosmetic: when
+            # a single turn of rent already exceeds D (a big schema and a
+            # cheap search, which is the common case here) the correct rule is
+            # to evict immediately, and testing `idle` alone would instead
+            # hold for one turn and pay S + D against an optimum of D.
+            if tool.schema_tokens * (idle + 1) >= self._cost.reactivation(tool):
+                drop.add(x)
+        return drop
+
+
 # ---------------------------------------------------------------------------
 # Offline bounds. All three read the future of the trace, so none of them is
 # implementable in a real agent, and none is a proposal. They exist to answer
@@ -263,6 +311,7 @@ def default_policies() -> list[Policy]:
         TTL(5),
         LRU(8),
         NoCache(),
+        SkiRental(),
         Oracle(16),
         MinLoads(),
         RentOptimal(),
@@ -272,6 +321,7 @@ def default_policies() -> list[Policy]:
 ALIASES = {
     "search-only": "search",
     "no-cache": "nocache",
+    "ski-rental": "ski",
     "min-loads": "minloads",
     "belady-min": "minloads",
     "belady": "minloads",
@@ -288,6 +338,7 @@ def build(spec: str) -> Policy:
         "static": lambda: Static(),
         "search": lambda: SearchOnly(),
         "nocache": lambda: NoCache(),
+        "ski": lambda: SkiRental(),
         "minloads": lambda: MinLoads(),
         "rentoptimal": lambda: RentOptimal(),
         "ttl": lambda: TTL(int(arg or 10)),

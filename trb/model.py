@@ -88,18 +88,47 @@ class CostModel:
     `discovery_tokens = 0` and `search_turn = False` reduce this to a pure
     residency model. Both are sweepable from the CLI, and the crossover point
     they produce is more interesting than any single number.
+
+    Reactivation can also **fail** - the search comes back empty, or with the
+    wrong tool. That is priced two different ways on purpose, because the two
+    do not behave alike:
+
+    - `failure_rate` x `failure_penalty` is the **expected token cost**, folded
+      into `D_i` so the closed form keeps working. Being linear, it collapses
+      into the reactivation price: a phase diagram over these two axes is
+      really one-dimensional in `D_eff`.
+    - `Result.session_success_prob` is the **session-level reliability**,
+      `(1 - failure_rate) ** reloads`. This one does *not* collapse. It decays
+      geometrically in the number of reactivations, so a policy that reloads
+      690 times at a 1% failure rate is near-certain to hit a failure even
+      though its expected token cost looks excellent. Token accounting cannot
+      see this, which is exactly why it needs its own number.
     """
 
     discovery_tokens: int = 150
     search_turn: bool = True
     premature_window: int = 5
+    failure_rate: float = 0.0
+    failure_penalty: int = 0
+
+    @property
+    def expected_failure_cost(self) -> int:
+        return int(self.failure_rate * self.failure_penalty)
 
     def reactivation(self, tool: Tool) -> int:
-        """`D_i` - what it costs to bring this specific tool back."""
-        return self.discovery_tokens + tool.reactivation_tokens
+        """`D_i^eff` - the expected cost of bringing this tool back."""
+        return (
+            self.discovery_tokens
+            + tool.reactivation_tokens
+            + self.expected_failure_cost
+        )
 
     def label(self) -> str:
-        return f"discovery={self.discovery_tokens}, search_turn={self.search_turn}"
+        base = f"discovery={self.discovery_tokens}, search_turn={self.search_turn}"
+        if self.failure_rate:
+            base += (f", p_fail={self.failure_rate:g}, "
+                     f"L_fail={self.failure_penalty:,}")
+        return base
 
 
 def load_catalog(path: str | Path) -> dict[str, Tool]:

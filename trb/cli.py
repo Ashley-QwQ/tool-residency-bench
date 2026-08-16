@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 from . import policies as pol
+from . import synthetic
 from .model import CostModel, load_all, load_catalog, load_workload
 from .report import curve, pareto_front, scatter, table, workload_section
 from .simulator import run
@@ -121,7 +122,7 @@ def cmd_pareto(args) -> None:
                      search_turn=not args.no_search_turn)
     specs = args.policy or [
         "static", "search-only", "ttl-20", "ttl-5", "lru-8", "no-cache",
-        "min-loads", "rent-optimal",
+        "ski-rental", "min-loads", "rent-optimal",
     ]
     trace = [int(x) for x in args.trace_discovery.split(",")] if args.trace_discovery else []
 
@@ -154,6 +155,161 @@ def cmd_pareto(args) -> None:
         print("```")
 
 
+def cmd_robustness(args) -> None:
+    """Re-check every headline claim on workloads nobody designed.
+
+    Each claim is stated as a proposition that can fail, evaluated
+    independently on every sampled workload, and reported as the fraction of
+    samples where it held plus the distribution of the underlying quantity. A
+    claim that only survives on the committed traces should show up here as a
+    number well below 100%.
+    """
+    cost = CostModel(discovery_tokens=args.discovery,
+                     search_turn=not args.no_search_turn)
+    ttl_grid = [pol.TTL(n) for n in (5, 10, 20, 50)]
+    lru_grid = [pol.LRU(n) for n in (4, 8, 16, 32)]
+
+    claims = {
+        "search-only costs >2x the optimum (accumulation is real)": [],
+        "min-loads costs >2x the optimum (wrong objective)": [],
+        "best TTL beats best count cap (rent != capacity)": [],
+        "ski-rental within 2x of the optimum (D/S is the right horizon)": [],
+        "every *heuristic* is Pareto-dominated": [],
+        "ski-rental reaches the Pareto frontier": [],
+    }
+    ratios = {"search-only": [], "min-loads": [], "ski-rental": [], "best-ttl": []}
+
+    for seed in range(args.seeds):
+        wl = synthetic.sample_workload(seed, args.catalog_size, args.turns)
+        opt = run(wl, pol.RentOptimal(), cost)
+        base = opt.total_tokens or 1
+
+        search = run(wl, pol.SearchOnly(), cost)
+        loads = run(wl, pol.MinLoads(), cost)
+        ski = run(wl, pol.SkiRental(), cost)
+        best_ttl = min((run(wl, p, cost) for p in ttl_grid), key=lambda r: r.total_tokens)
+        best_lru = min((run(wl, p, cost) for p in lru_grid), key=lambda r: r.total_tokens)
+
+        ratios["search-only"].append(search.total_tokens / base)
+        ratios["min-loads"].append(loads.total_tokens / base)
+        ratios["ski-rental"].append(ski.total_tokens / base)
+        ratios["best-ttl"].append(best_ttl.total_tokens / base)
+
+        claims["search-only costs >2x the optimum (accumulation is real)"].append(
+            search.total_tokens > 2 * base)
+        claims["min-loads costs >2x the optimum (wrong objective)"].append(
+            loads.total_tokens > 2 * base)
+        claims["best TTL beats best count cap (rent != capacity)"].append(
+            best_ttl.total_tokens < best_lru.total_tokens)
+        claims["ski-rental within 2x of the optimum (D/S is the right horizon)"].append(
+            ski.total_tokens <= 2 * base)
+
+        pts = [(r.policy, r.reloads, r.resident_token_rent) for r in
+               (search, loads, ski, best_ttl, best_lru,
+                run(wl, pol.Static(), cost), run(wl, pol.NoCache(), cost))]
+        # The frontier is traced by the optimum at a range of prices, exactly
+        # as `trb pareto` does. Comparing against a single optimum point would
+        # understate it and make the heuristics look better than they are.
+        for d in (0, 150, 1000, 5000, 20000, 100000):
+            r = run(wl, pol.RentOptimal(),
+                    CostModel(discovery_tokens=d, search_turn=cost.search_turn))
+            pts.append((f"opt@{d}", r.reloads, r.resident_token_rent))
+        front = pareto_front(pts)
+        heuristics = {"search-only", "no-cache", "static",
+                      best_ttl.policy, best_lru.policy}
+        claims["every *heuristic* is Pareto-dominated"].append(
+            not (front & heuristics))
+        claims["ski-rental reaches the Pareto frontier"].append(
+            "ski-rental" in front)
+
+    def pct(v):
+        return 100.0 * sum(v) / len(v) if v else 0.0
+
+    def quart(v):
+        s = sorted(v)
+        return s[len(s) // 4], s[len(s) // 2], s[3 * len(s) // 4]
+
+    print(f"\n## Robustness over {args.seeds} randomly sampled workloads\n")
+    print(f"Cost model: {cost.label()}. Catalogs up to 1,000 tools, traces up "
+          "to 1,500 turns, random phase structure, burstiness, recurrence and "
+          "long-tail rate. Seeds 0..N, fully reproducible.\n")
+    print("| claim | holds on |")
+    print("|---|---|")
+    for name, vals in claims.items():
+        print(f"| {name} | **{pct(vals):.1f}%** of samples |")
+
+    print("\n| cost relative to rent-optimal | p25 | median | p75 |")
+    print("|---|---|---|---|")
+    for name, vals in ratios.items():
+        a, b, c = quart(vals)
+        print(f"| {name} | {a:.2f}x | **{b:.2f}x** | {c:.2f}x |")
+
+
+def cmd_reliability(args) -> None:
+    """v0.2: what happens once reactivation is allowed to fail.
+
+    Two grids, because failure has two effects that behave nothing alike.
+
+    As an **expected token cost** it is linear, so it folds into `D_eff` and
+    changes nothing structural - the first grid is really the reactivation
+    sweep wearing a different hat, and saying so is more useful than dressing
+    it up as a new phenomenon.
+
+    As **session reliability** it is geometric: surviving `R` reactivations at
+    failure rate `p` has probability `(1-p)^R`. Token accounting cannot see
+    this at all. A policy reloading 912 times at p=0.01 has a 0.01% chance of
+    getting through the session untouched, while its expected token cost still
+    looks like the best number in the table.
+
+    The second grid therefore asks a different question: cheapest policy that
+    still completes the session with probability >= the floor. That is where
+    "retrieval reliability sets the ceiling on eviction aggressiveness" stops
+    being a slogan and becomes a boundary you can point at.
+    """
+    workloads = _load(args.workload)
+    ps = [float(x) for x in args.failure_rates.split(",")]
+    ls = [int(x) for x in args.failure_penalties.split(",")]
+    specs = args.policy or [
+        "search-only", "ttl-20", "ttl-5", "lru-8", "ski-rental",
+        "no-cache", "min-loads",
+    ]
+    short = {s: s for s in specs}
+
+    for wl in workloads:
+        print(f"\n### {wl.name}\n")
+        for floor in (None, args.reliability_floor):
+            if floor is None:
+                print("**Cheapest by expected tokens** (reliability ignored)\n")
+            else:
+                print(f"\n**Cheapest with P(session completes) >= {floor:.0%}**\n")
+            print("| p_fail \\ L_fail | " + " | ".join(f"{x:,}" for x in ls) + " |")
+            print("|" + "|".join("---" for _ in range(len(ls) + 1)) + "|")
+            for p in ps:
+                cells = []
+                for L in ls:
+                    cost = CostModel(discovery_tokens=args.discovery,
+                                     search_turn=not args.no_search_turn,
+                                     failure_rate=p, failure_penalty=L)
+                    rs = [run(wl, pol.build(s), cost) for s in specs]
+                    if floor is not None:
+                        ok = [r for r in rs if r.session_success_prob >= floor]
+                        if not ok:
+                            cells.append("_none_")
+                            continue
+                        rs = ok
+                    best = min(rs, key=lambda r: r.total_tokens)
+                    cells.append(f"{short.get(best.policy, best.policy)}")
+                print(f"| {p:g} | " + " | ".join(cells) + " |")
+        print()
+        cost = CostModel(discovery_tokens=args.discovery, failure_rate=0.01)
+        print("Reactivation exposure at p_fail=0.01 (why the two grids differ):\n")
+        print("| policy | reactivations | P(session completes) |")
+        print("|---|---|---|")
+        for s in specs:
+            r = run(wl, pol.build(s), cost)
+            print(f"| {s} | {r.reloads:,} | {r.session_success_prob:.1%} |")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="trb", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -175,6 +331,24 @@ def main(argv=None) -> None:
     s = sub.add_parser("sweep", parents=[common], help="sweep the discovery cost")
     s.add_argument("--discovery-range", default="0,150,1000,5000,20000,100000")
     s.set_defaults(func=cmd_sweep)
+
+    rb = sub.add_parser("robustness", parents=[common],
+                        help="re-check the claims on randomly sampled workloads")
+    rb.add_argument("--seeds", type=int, default=200)
+    rb.add_argument("--discovery", type=int, default=150)
+    rb.add_argument("--catalog-size", type=int, default=None,
+                    help="fix the catalog size instead of sampling it")
+    rb.add_argument("--turns", type=int, default=None,
+                    help="fix the trace length instead of sampling it")
+    rb.set_defaults(func=cmd_robustness)
+
+    rel = sub.add_parser("reliability", parents=[common],
+                         help="v0.2: policy choice once reactivation can fail")
+    rel.add_argument("--discovery", type=int, default=150)
+    rel.add_argument("--failure-rates", default="0,0.001,0.01,0.05,0.1")
+    rel.add_argument("--failure-penalties", default="0,1000,10000,100000")
+    rel.add_argument("--reliability-floor", type=float, default=0.95)
+    rel.set_defaults(func=cmd_reliability)
 
     p = sub.add_parser("pareto", parents=[common],
                        help="rent vs. reactivations, with no exchange rate assumed")

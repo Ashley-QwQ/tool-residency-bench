@@ -138,8 +138,10 @@ workload, with tables and curves.
 
 ```bash
 python -m trb run -w burst -p search-only -p ttl-5 -p min-loads -p rent-optimal
-python -m trb sweep  -w long_tail     # optimality gap vs. reactivation price
-python -m trb pareto -w long_tail     # the trade-off with no price assumed
+python -m trb sweep       -w long_tail  # optimality gap vs. reactivation price
+python -m trb pareto      -w long_tail  # the trade-off with no price assumed
+python -m trb reliability -w long_mixed # v0.2: once reactivation can fail
+python -m trb robustness --seeds 300    # the claims on random workloads
 python tests/test_simulator.py        # invariants
 python tests/test_optimality.py       # brute-force validation of the optimum
 ```
@@ -181,6 +183,7 @@ from the code.
 | `ttl-N` | drop anything unused for N turns | Denning's working set (1968) |
 | `lru-N` | keep at most N tools | the reflex answer |
 | `no-cache` | drop everything not used this turn | maximally aggressive; the thrash control |
+| `ski-rental` | hold `ceil(D/S)-1` idle turns, then drop | **the strong online baseline**: 2-competitive, and provably the best any cost-only policy can be |
 | `oracle-N` | drop what is not needed within N turns | *offline heuristic* — arbitrary horizon, not an optimum |
 | `min-loads` | never drop anything ever needed again | Belady's MIN: **optimal for miss count** |
 | `rent-optimal` | drop iff `schema × idle turns > search cost` | **optimal for rent + reactivation** |
@@ -328,14 +331,13 @@ long_tail
 
 A dominated policy is beaten on **both** axes at once, so no exchange rate
 between them can rescue it — this conclusion holds whatever anyone thinks `D`
-should be. Across all seven workloads, every implementable policy in the suite
-is dominated; the frontier is made entirely of offline bounds. `D` turns out
-not to decide who is good, only **where on the frontier** a deployment wants
-to sit.
+should be. Every heuristic in the suite is dominated, on all seven workloads
+and on 95.7% of 300 randomly sampled ones. `D` turns out not to decide who is
+good, only **where on the frontier** a deployment wants to sit.
 
-That reframes what a residency policy is even for. It is not "beat LRU." It is
-**get an online policy onto a frontier currently occupied only by policies
-that can see the future.**
+That reframes what a residency policy is for. It is not "beat LRU" — LRU is
+not even on the map. It is **get an online policy onto a frontier otherwise
+occupied only by policies that can see the future.**
 
 **7. The value of lifecycle management varies by orders of magnitude across
 workloads.** On `short`, `rent-optimal` saves 1,360 tokens against never
@@ -348,6 +350,80 @@ length has to be predicted. It does not by itself prove observed pressure is a
 *better* gate than predicted length — that needs a gating benchmark that holds
 prediction accuracy fixed and compares the two triggers, which this repo does
 not contain.
+
+---
+
+**8. The online problem is ski rental — which caps how much cleverness can
+help.** Strip one idle gap to its decision and it is exact: pay `S` per turn to
+keep renting, or `D` once to settle it. So the classic rule applies (hold
+`⌈D/S⌉ − 1` idle turns, then evict), it is **2-competitive**, and the
+Proposition's independence makes the per-gap guarantee a whole-session one.
+That ships as `ski-rental`.
+
+The barrier matters more than the algorithm. Ski rental's deterministic lower
+bound is also 2, and this problem contains ski rental as a special case, so no
+deterministic online policy can beat 2x — `e/(e−1) ≈ 1.58` randomised — using
+cost reasoning alone. Getting below that requires information about `g` itself,
+which is exactly what a phase boundary is.
+
+And the measured news is bad for the semantic thesis, stated plainly:
+`ski-rental` knows *nothing* about the task and lands at a **median 1.13x** of
+the offline optimum across 300 random workloads (**1.04x** on `long_mixed`).
+On token cost, semantics has almost nothing left to win.
+
+**9. Which is the wrong place to have been looking. Once reactivation can
+fail, the whole ranking inverts.** At `p_fail = 0.01` on `long_mixed`:
+
+| policy | reactivations | P(session completes) |
+|---|---|---|
+| search-only | 0 | 100.0% |
+| min-loads | 0 | 100.0% |
+| ttl-20 | 149 | 22.4% |
+| no-cache | 690 | 0.1% |
+| ski-rental | 912 | **0.0%** |
+
+Expected token cost grows linearly in reactivations; the probability of
+completing the session decays geometrically in them. `ski-rental` is the best
+policy in the repo on tokens and unusable here. Impose a 95% completion floor
+and the cheapest policy at **any** non-zero failure rate becomes `min-loads` —
+the most conservative one.
+
+So the value of semantic knowledge is not that it evicts *sooner*. It is that
+it evicts **without exposure**: a tool whose phase has completed can be dropped
+at a reload probability of zero, rather than on a `D/S` bet that it will not
+come back. `min-loads` is functionally a perfect semantic policy — it evicts
+exactly what is dead — and the gap between it and the rent optimum is the part
+no cost-only policy can reach. Details in
+[`docs/reliability.md`](docs/reliability.md).
+
+---
+
+## Do the conclusions survive workloads nobody designed?
+
+The seven traces are hand-shaped to be pathological in named ways, which is
+what makes them explanatory and also what makes them suspect.
+`python -m trb robustness` re-checks every claim on randomly sampled
+workloads — catalogs up to 1,000 tools, traces up to 1,500 turns, random phase
+structure, burstiness, recurrence and long-tail rate:
+
+```text
+300 sampled workloads
+
+| claim                                                     | holds on |
+| search-only costs >2x the optimum                         |    98.7% |
+| min-loads costs >2x the optimum (wrong objective)         |    92.3% |
+| best TTL beats best count cap (rent != capacity)          |    98.0% |
+| ski-rental within 2x of the optimum (D/S is the horizon)  |   100.0% |
+| every heuristic is Pareto-dominated                       |    95.7% |
+
+| cost relative to rent-optimal | p25   | median | p75   |
+| search-only                   | 7.51x | 12.22x | 21.60x|
+| min-loads                     | 3.26x |  4.97x |  7.48x|
+| best TTL                      | 1.61x |  2.21x |  3.10x|
+| ski-rental                    | 1.08x |  1.13x |  1.17x|
+```
+
+Nothing here rests on the seven traces.
 
 ---
 
@@ -432,61 +508,66 @@ restorable — and nobody appears to be scheduling them specifically.
 
 ## Status
 
-**v0.1 — problem characterisation.** Frozen and tagged. It is a cost model and
-a benchmark, not a framework, and it is complete as that:
+**v0.1 — problem characterisation.** Tagged `v0.1` / `v0.1.1`. A cost model and
+a benchmark, not a framework, and complete as that:
 
 ```text
 + perfect oracle discovery, no LLM anywhere
 + 42-tool heterogeneous catalog (150-1,810 tokens per schema)
-+ 7 workloads, 7 policies
++ 7 hand-shaped workloads, 9 policies
 + Resident Token Rent as the metric
 + min-loads oracle    (miss-optimal)
-+ rent-optimal oracle (rent-optimal, closed form)
++ rent-optimal oracle (rent-optimal, closed form + proof)
 + reactivation-cost sweep, reported as optimality gap
 + Pareto frontier, so nothing depends on one choice of price
 + the closed form validated against exhaustive enumeration of every
   eviction schedule on small traces, plus metamorphic invariants
 + event semantics pinned down in docs/timing-model.md
++ ski-rental online baseline: 2-competitive, matching lower bound
++ robustness sweep over randomly sampled workloads
 + stated falsification criteria
 ```
 
-The point of tagging it rather than rolling straight on: v0.1 answers a
-question that stays answered. Whatever happens to v0.2, this is not a
-half-built thing.
+**v0.2 — pricing failure.** Landed: `trb reliability`, and
+[`docs/reliability.md`](docs/reliability.md). This is where the v0.1 framing
+turned out to be looking in the wrong place — see findings 8 and 9. Still open
+for v0.2:
+
+- **Correlated failure.** `p_fail` is currently i.i.d. per reactivation. Real
+  retrieval failures are per-tool and persistent: a badly described tool fails
+  every time, not one time in a hundred, which would make some tools
+  effectively unevictable rather than merely risky.
+- **The selection budget.** Where tool-call error rate actually starts
+  climbing for an 8B–30B local model as resident tool count grows. Anthropic's
+  30–50 figure is for a frontier model; a smaller one is almost certainly
+  lower and it is directly measurable rather than assumable by analogy. This
+  belongs in its own benchmark, with count, total schema tokens, and inter-tool
+  similarity varied separately — they are three different hypotheses and are
+  routinely conflated into one.
+- **Real traces.** Not thousands of sessions: twenty would do, reduced to
+  `turn, tool_id, schema_size, phase` and nothing else. The single question
+  worth asking of them is the shape of `P(next_use_gap = g)`, because that
+  distribution is what every result here is ultimately a function of. If it
+  looks like the committed traces, they are justified; if it does not, the
+  generator is wrong and that is worth knowing early.
+
+**v0.3 — the first semantic policy.** Deliberately last. The target is now
+precise, which it was not before v0.2: get near `ski-rental` on rent while
+near `min-loads` on reload count. That region of the Pareto plot is currently
+empty, and no cost-only policy can enter it — the ski-rental lower bound says
+so. `Step.phase` is already recorded in every trace and read by nothing.
 
 Explicitly **not** in this repo, and not by accident:
 
-- a proposed residency policy
-- any semantic, phase-aware, or plan-aware eviction
+- a proposed *semantic* residency policy (`ski-rental` is a baseline derived
+  from the cost model, not a proposal — it exists so that v0.3 has something
+  real to beat)
 - an embedding or BM25 retriever (discovery is an oracle here on purpose)
 - an LLM anywhere in the loop
 - an MCP client or agent framework
 
-Each of those is a variable that would make it impossible to attribute a
-result to the residency policy alone, which is the only thing v0.1 is trying
-to establish.
-
-**v0.2** prices imperfect retrieval; **v0.3** is the first online policy. In
-that order, because an adaptive policy tuned against a cost model that cannot
-charge for reactivation failure would be tuned against the wrong thing.
-
-The three things v0.2 should do, in order of how much they would sharpen the
-argument:
-
-1. **Price reactivation failure and draw the phase diagram.** Degrade oracle
-   discovery from 100% to 99 / 95 / 90%, give a miss a controllable penalty,
-   and plot re-search cost against failure rate. `no-cache`'s advantage should
-   collapse somewhere on that surface, and the optimal policy should migrate
-   `no-cache → ttl → conservative residency` as you move across it. That turns
-   "retrieval reliability sets the ceiling on eviction aggressiveness" from a
-   sentence into a figure.
-2. **Measure the selection budget.** Find where tool-call error rate actually
-   starts climbing for an 8B–30B local model as resident tool count grows.
-   Anthropic's 30–50 figure is for a frontier model; a smaller one is almost
-   certainly lower, and it is directly measurable rather than assumable by
-   analogy. That number turns finding 3's second budget into a real axis.
-3. **A phase-aware policy**, measured against `rent-optimal` on these traces.
-   `Step.phase` is already in every trace and read by nothing.
+Each is a variable that would make it impossible to attribute a result to the
+residency policy alone.
 
 Issues and traces that break the baselines are very welcome. A trace where
 `search-only` is genuinely the right answer would be the most useful

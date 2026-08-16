@@ -49,6 +49,8 @@ class Result:
     premature_reloads: int = 0  # reloaded within CostModel.premature_window
     discovery_tokens: int = 0
     search_turn_tokens: int = 0
+    failure_tokens: int = 0
+    failure_rate: float = 0.0  # copied from the cost model, for reporting
 
     series: list[int] = field(default_factory=list)  # resident tokens per turn
     count_series: list[int] = field(default_factory=list)
@@ -56,7 +58,24 @@ class Result:
     @property
     def total_tokens(self) -> int:
         """Everything the tool layer costs over the whole session."""
-        return self.resident_token_rent + self.discovery_tokens + self.search_turn_tokens
+        return (self.resident_token_rent + self.discovery_tokens
+                + self.search_turn_tokens + self.failure_tokens)
+
+    @property
+    def session_success_prob(self) -> float:
+        """Probability that no reactivation in this session failed.
+
+        Only reloads count. Every on-demand policy pays the same first loads,
+        so those are common exposure; what differs between policies - and what
+        eviction actually buys with - is the number of *re*-activations.
+
+        This decays geometrically while token cost grows linearly, which is
+        why the two rank policies differently and why aggressive eviction can
+        look excellent right up until it is unusable.
+        """
+        if self.failure_rate <= 0:
+            return 1.0
+        return (1.0 - self.failure_rate) ** self.reloads
 
     @property
     def mean_resident_tokens(self) -> float:
@@ -76,10 +95,18 @@ class Result:
 def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Result:
     cost = cost or CostModel()
     res = Result(workload.name, policy.name, len(workload.steps))
+    res.failure_rate = cost.failure_rate
 
     resident: set[str] = set(policy.start(workload, cost))
     ever_loaded: set[str] = set()
     evicted_at: dict[str, int] = {}
+    catalog = workload.catalog
+
+    # Rent is tracked incrementally rather than re-summed each turn. At a
+    # thousand-tool catalog the naive version dominates the runtime of the
+    # robustness sweep, and the two agree exactly (integer arithmetic, no
+    # accumulation error) - `test_static_never_searches` pins the flat line.
+    rent = sum(catalog[x].schema_tokens for x in resident)
 
     for t, step in enumerate(workload.steps):
         missing = [x for x in step.tools if x not in resident]
@@ -91,20 +118,22 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
             res.searches += 1
             res.discovery_tokens += cost.discovery_tokens
             if cost.search_turn:
-                res.search_turn_tokens += workload.tokens(resident)
+                res.search_turn_tokens += rent
             for tool in missing:
                 res.loads += 1
                 # Per-tool surcharge on top of the shared round trip, for
-                # tools that are expensive to rehydrate specifically.
-                res.discovery_tokens += workload.catalog[tool].reactivation_tokens
+                # tools that are expensive to rehydrate specifically, plus the
+                # expected cost of a reactivation that fails.
+                res.discovery_tokens += catalog[tool].reactivation_tokens
                 if tool in ever_loaded:
                     res.reloads += 1
+                    res.failure_tokens += cost.expected_failure_cost
                     if t - evicted_at.get(tool, -(10**9)) <= cost.premature_window:
                         res.premature_reloads += 1
                 ever_loaded.add(tool)
                 resident.add(tool)
+                rent += catalog[tool].schema_tokens
 
-        rent = workload.tokens(resident)
         res.resident_token_rent += rent
         res.series.append(rent)
         res.count_series.append(len(resident))
@@ -115,6 +144,7 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
         dropped = policy.evict(t, resident, workload) & resident
         for tool in dropped:
             evicted_at[tool] = t
+            rent -= catalog[tool].schema_tokens
         resident -= dropped
         res.evictions += len(dropped)
 
