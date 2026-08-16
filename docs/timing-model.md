@@ -123,8 +123,10 @@ threshold in the test.
 Listed so nobody has to reverse-engineer the absence:
 
 - tool execution time, output size, or failure;
-- retrieval failure — discovery is a perfect oracle, which is the single
-  largest omission and the first item in v0.2;
+- retrieval *discovery* is still a perfect oracle: the agent always knows
+  which tool it needs. Reactivation **failure** is modelled as of v0.2, per
+  tool, but a failed reactivation is priced rather than simulated - there is
+  no retry, no re-plan, and no alternative-tool search (see docs/reliability.md);
 - prompt caching and KV-cache reuse, so `rent` here is *logical* context
   occupancy rather than recomputation (see the README's three axes);
 - any effect of resident tool count on the model's own behaviour;

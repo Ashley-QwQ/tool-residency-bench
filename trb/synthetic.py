@@ -18,6 +18,47 @@ import random
 from .model import Step, Tool, Workload
 
 
+FAILURE_PROFILES = ("uniform", "mixed", "persistent")
+
+
+def apply_failure_profile(
+    workload: Workload, profile: str, base_rate: float
+) -> Workload:
+    """Spread a mean failure rate across tools in different shapes.
+
+    The shapes matter more than the mean. All three below have roughly the
+    same expected failure rate; they describe completely different worlds.
+
+    - `uniform`: every tool fails at `base_rate`. The i.i.d. assumption, kept
+      as the null hypothesis.
+    - `mixed`: 80% of tools at a quarter the rate, 20% at four times it. Some
+      tools are simply harder to find than others.
+    - `persistent`: 90% of tools essentially never fail, 10% fail *half* the
+      time. This is the realistic one - a tool with a vague name and a thin
+      description is not unlucky, it is unfindable, and it is unfindable every
+      single time you look.
+
+    Assignment is deterministic in the tool id, so a given catalog always gets
+    the same profile and results stay reproducible.
+    """
+    if profile not in FAILURE_PROFILES:
+        raise ValueError(f"unknown failure profile '{profile}'")
+
+    catalog = {}
+    for i, (tid, tool) in enumerate(sorted(workload.catalog.items())):
+        if profile == "uniform":
+            rate = base_rate
+        elif profile == "mixed":
+            rate = base_rate * (4.0 if i % 5 == 0 else 0.25)
+        else:  # persistent
+            rate = 0.5 if i % 10 == 0 else base_rate * 0.01
+        catalog[tid] = Tool(
+            tool.id, tool.schema_tokens, tool.server,
+            tool.reactivation_tokens, min(rate, 0.99),
+        )
+    return Workload(workload.name, workload.description, catalog, workload.steps)
+
+
 def sample_catalog(rng: random.Random, size: int) -> dict[str, Tool]:
     """Schema sizes log-uniform over roughly the range real MCP tools occupy.
 

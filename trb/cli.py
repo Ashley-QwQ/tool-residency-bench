@@ -47,9 +47,10 @@ def cmd_run(args) -> None:
         "# Results",
         "",
         f"Cost model: {cost.label()}. "
-        "`token-turns` is the sum, over every turn, of the schema tokens "
-        "resident on that turn. `total tokens` adds the one-off discovery and "
-        "re-search costs on top.",
+        "`RTR` (Resident Token Rent) is the sum, over every turn, of the "
+        "schema tokens resident on that turn. `total tokens` adds the one-off "
+        "discovery, re-search and expected-failure costs on top. `opt gap` is "
+        "the ratio to `rent-optimal`, the offline optimum for this objective.",
         "",
     ]
     for wl in workloads:
@@ -273,10 +274,8 @@ def cmd_reliability(args) -> None:
         "search-only", "ttl-20", "ttl-5", "lru-8", "ski-rental",
         "no-cache", "min-loads",
     ]
-    short = {s: s for s in specs}
-
     for wl in workloads:
-        print(f"\n### {wl.name}\n")
+        print(f"\n### {wl.name} - failure profile: {args.failure_profile}\n")
         for floor in (None, args.reliability_floor):
             if floor is None:
                 print("**Cheapest by expected tokens** (reliability ignored)\n")
@@ -290,7 +289,10 @@ def cmd_reliability(args) -> None:
                     cost = CostModel(discovery_tokens=args.discovery,
                                      search_turn=not args.no_search_turn,
                                      failure_rate=p, failure_penalty=L)
-                    rs = [run(wl, pol.build(s), cost) for s in specs]
+                    shaped = (wl if args.failure_profile == "uniform"
+                              else synthetic.apply_failure_profile(
+                                  wl, args.failure_profile, p))
+                    rs = [run(shaped, pol.build(s), cost) for s in specs]
                     if floor is not None:
                         ok = [r for r in rs if r.session_success_prob >= floor]
                         if not ok:
@@ -298,16 +300,22 @@ def cmd_reliability(args) -> None:
                             continue
                         rs = ok
                     best = min(rs, key=lambda r: r.total_tokens)
-                    cells.append(f"{short.get(best.policy, best.policy)}")
+                    cells.append(best.policy)
                 print(f"| {p:g} | " + " | ".join(cells) + " |")
         print()
-        cost = CostModel(discovery_tokens=args.discovery, failure_rate=0.01)
-        print("Reactivation exposure at p_fail=0.01 (why the two grids differ):\n")
-        print("| policy | reactivations | P(session completes) |")
-        print("|---|---|---|")
+        cost = CostModel(discovery_tokens=args.discovery, failure_rate=0.01,
+                         failure_penalty=args.exposure_penalty)
+        shaped = (wl if args.failure_profile == "uniform"
+                  else synthetic.apply_failure_profile(wl, args.failure_profile, 0.01))
+        print(f"Reactivation exposure at mean p_fail=0.01, "
+              f"L_fail={args.exposure_penalty:,} (why the two grids differ):\n")
+        print("| policy | reactivations | riskiest tool reloaded | "
+              "P(session completes) | rent |")
+        print("|---|---|---|---|---|")
         for s in specs:
-            r = run(wl, pol.build(s), cost)
-            print(f"| {s} | {r.reloads:,} | {r.session_success_prob:.1%} |")
+            r = run(shaped, pol.build(s), cost)
+            print(f"| {s} | {r.reloads:,} | p={r.riskiest_reload:.3g} | "
+                  f"{r.session_success_prob:.1%} | {r.resident_token_rent:,} |")
 
 
 def main(argv=None) -> None:
@@ -348,6 +356,11 @@ def main(argv=None) -> None:
     rel.add_argument("--failure-rates", default="0,0.001,0.01,0.05,0.1")
     rel.add_argument("--failure-penalties", default="0,1000,10000,100000")
     rel.add_argument("--reliability-floor", type=float, default=0.95)
+    rel.add_argument("--exposure-penalty", type=int, default=10000,
+                     help="L_fail used for the exposure table at the bottom")
+    rel.add_argument("--failure-profile", default="uniform",
+                     choices=list(synthetic.FAILURE_PROFILES),
+                     help="how the mean failure rate is spread across tools")
     rel.set_defaults(func=cmd_reliability)
 
     p = sub.add_parser("pareto", parents=[common],

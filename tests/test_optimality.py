@@ -246,6 +246,61 @@ def test_ski_rental_is_two_competitive():
     )
 
 
+def test_per_tool_failure_rates_override_the_global_one():
+    wl = CASES[0]
+    risky = Workload(
+        wl.name, "",
+        {"a": Tool("a", 300, failure_rate=0.9), "b": Tool("b", 900)},
+        wl.steps,
+    )
+    cost = CostModel(failure_rate=0.0, failure_penalty=1000)
+    # `a` carries its own rate; `b` falls back to the global 0.0.
+    assert cost.failure_rate_for(risky.catalog["a"]) == 0.9
+    assert cost.failure_rate_for(risky.catalog["b"]) == 0.0
+    assert cost.reactivation(risky.catalog["a"]) > cost.reactivation(risky.catalog["b"])
+
+
+def test_survival_is_a_product_over_the_tools_actually_reloaded():
+    """Not `(1-p)^R` - which tools get reloaded is the whole point.
+
+    Two policies with the same reload count can carry completely different
+    risk, so survival has to be computed from the identities of the
+    reactivations rather than their number.
+    """
+    steps = [Step(("a",)), Step(("b",)), Step(("a",)), Step(("b",))]
+    catalog = {"a": Tool("a", 900, failure_rate=0.5),
+               "b": Tool("b", 900, failure_rate=0.0)}
+    wl = Workload("risk", "", catalog, steps)
+    r = run(wl, pol.NoCache(), CostModel(failure_penalty=0))
+    # `a` is reloaded once and `b` once, but only `a` carries risk, so
+    # survival is 0.5 rather than the 0.25 an `(1-p)^R` model would give.
+    assert r.reloads == 2
+    assert abs(r.session_success_prob - 0.5) < 1e-12
+    assert r.riskiest_reload == 0.5
+
+
+def test_a_dangerous_tool_becomes_effectively_unevictable():
+    """The reason per-tool rates matter: risk localises to specific tools.
+
+    A high `p_i` inflates `D_i^eff`, which inflates `g*_i = D_i/S_i`, until
+    the break-even gap exceeds the trace and the tool is never evicted at all.
+    Under a global failure rate this cannot be expressed - reliability could
+    only ever be bought by reloading *less overall*, never by reloading
+    *different things*.
+    """
+    steps = ([Step(("a",))] + [Step(("b",))] * 8) * 6
+    for penalty, expect_risky_reload in ((0, True), (10**7, False)):
+        catalog = {"a": Tool("a", 900, failure_rate=0.5),
+                   "b": Tool("b", 900, failure_rate=0.0)}
+        wl = Workload("risk", "", catalog, steps)
+        r = run(wl, pol.RentOptimal(), CostModel(failure_penalty=penalty))
+        assert (r.riskiest_reload > 0) is expect_risky_reload, (
+            f"at L_fail={penalty:,} the risky tool should "
+            f"{'still be' if expect_risky_reload else 'no longer be'} reloaded"
+        )
+    assert r.session_success_prob == 1.0, "and the session becomes safe"
+
+
 def test_reliability_and_token_cost_rank_policies_differently():
     """The v0.2 finding, as an assertion rather than a paragraph.
 

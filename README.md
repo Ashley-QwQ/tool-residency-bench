@@ -140,7 +140,7 @@ workload, with tables and curves.
 python -m trb run -w burst -p search-only -p ttl-5 -p min-loads -p rent-optimal
 python -m trb sweep       -w long_tail  # optimality gap vs. reactivation price
 python -m trb pareto      -w long_tail  # the trade-off with no price assumed
-python -m trb reliability -w long_mixed # v0.2: once reactivation can fail
+python -m trb reliability -w long_mixed --failure-profile persistent
 python -m trb robustness --seeds 300    # the claims on random workloads
 python tests/test_simulator.py        # invariants
 python tests/test_optimality.py       # brute-force validation of the optimum
@@ -186,7 +186,7 @@ from the code.
 | `ski-rental` | hold `ceil(D/S)-1` idle turns, then drop | **the strong online baseline**: 2-competitive, and provably the best any cost-only policy can be |
 | `oracle-N` | drop what is not needed within N turns | *offline heuristic* — arbitrary horizon, not an optimum |
 | `min-loads` | never drop anything ever needed again | Belady's MIN: **optimal for miss count** |
-| `rent-optimal` | drop iff `schema × idle turns > search cost` | **optimal for rent + reactivation** |
+| `rent-optimal` | drop iff `schema × idle turns > D_i` | **optimal for rent + reactivation** |
 
 The last three read the future of the trace, so none is implementable and none
 is a proposal. They exist to answer the question that has to come first: **is
@@ -388,6 +388,32 @@ policy in the repo on tokens and unusable here. Impose a 95% completion floor
 and the cheapest policy at **any** non-zero failure rate becomes `min-loads` —
 the most conservative one.
 
+**10. But that inversion is largely an artefact of assuming failure is
+uniform.** Retrieval failure is not a coin re-tossed per attempt: a tool with
+a vague name and thin description is unfindable *every* time, and a well-named
+one essentially never is. `Tool.failure_rate` sets `p_i` per tool, and session
+survival becomes a product over the tools actually reactivated rather than
+`(1−p)^R`. With 90% of tools safe and 10% failing half the time
+(`--failure-profile persistent`), as failure gets expensive:
+
+| L_fail | reactivations | riskiest tool reloaded | P(completes) |
+|---|---|---|---|
+| 0 | 690 | p=0.5 | 0.0% |
+| 100,000 | 600 | p=0.5 | 0.0% |
+| **1,000,000** | **575** | **p=0.0001** | **94.4%** |
+
+The policy does not gradually reload less — it stops reloading the *dangerous*
+tools specifically while still reloading the safe ones 575 times. No new
+machinery is needed: a high `p_i` inflates `D_i`, which inflates `g*_i`, until
+the tool is effectively unevictable. **Risk localises, and so does residency.**
+
+So the v0.1 slogan needs restating. Reliability does not cap how aggressive a
+policy may be; it caps **aggression per tool**, and a policy that cannot tell
+its tools apart is stuck applying the worst tool's ceiling to all of them.
+Which is a second kind of per-tool knowledge that is not in the access
+history — alongside "which tools are dead". Same shape of answer: **what is
+worth knowing about a tool is not when it was last used.**
+
 So the value of semantic knowledge is not that it evicts *sooner*. It is that
 it evicts **without exposure**: a tool whose phase has completed can be dropped
 at a reload probability of zero, rather than on a `D/S` bet that it will not
@@ -431,19 +457,23 @@ Nothing here rests on the seven traces.
 
 Read these before quoting any number above.
 
-- **Discovery is a perfect oracle, and reactivation never fails.** Real
-  re-search can return nothing, or the wrong thing. That risk is priced
-  nowhere in this model, and it is the single biggest reason `no-cache`'s
-  token win must **not** be read as a recommendation. See finding 5: the
-  model endorses aggressive eviction because the model does not charge for
-  the thing that makes aggressive eviction dangerous. The full objective a
-  real policy should be minimising is
+- **Discovery is a perfect oracle.** The agent always knows *which* tool it
+  needs; only reactivation can fail. Findings 1-8 are all computed with
+  failure switched off, so read them as the token-only regime rather than as
+  recommendations — finding 5 in particular endorses aggressive eviction
+  precisely because that regime does not charge for what makes it dangerous.
 
   ```text
-  residency rent          schema_tokens x resident_turns     (modelled here)
-  + reactivation cost     search tokens + latency            (partly modelled)
-  + failure cost          P(retrieval fails) x penalty       (not modelled)
+  residency rent          schema_tokens x resident_turns   modelled
+  + reactivation cost     search tokens, per tool          modelled
+  + failure cost          p_i x penalty, per tool          modelled (v0.2)
+  + failure recovery      retry, re-plan, escalate         NOT modelled
   ```
+
+- **A failed reactivation is priced, not simulated.** There is no retry, no
+  re-planning around the missing capability, and no fallback to a different
+  tool. A real agent would do all three, and `p_i` is an input here rather
+  than something measured.
 - **RTR is logical context occupancy, not compute.** This is the caveat most
   likely to be mistaken for a claim it is not making. **15M token-turns does
   not mean 15M extra tokens were processed.** With prompt caching, KV reuse,
@@ -533,10 +563,13 @@ a benchmark, not a framework, and complete as that:
 turned out to be looking in the wrong place — see findings 8 and 9. Still open
 for v0.2:
 
-- **Correlated failure.** `p_fail` is currently i.i.d. per reactivation. Real
-  retrieval failures are per-tool and persistent: a badly described tool fails
-  every time, not one time in a hundred, which would make some tools
-  effectively unevictable rather than merely risky.
+- **Measuring `p_i` rather than assuming it.** Per-tool failure rates are
+  modelled and they change the conclusion (finding 10), but nothing here
+  estimates them. The cheapest source is the harness itself: record whether a
+  re-search found what it went looking for, and `p_i` falls out of the logs.
+- **Failure recovery.** A failed reactivation currently just costs tokens.
+  Retry, re-plan, and fallback-to-another-tool are all missing, and they are
+  what determines whether a failure is an annoyance or the end of the task.
 - **The selection budget.** Where tool-call error rate actually starts
   climbing for an 8B–30B local model as resident tool count grows. Anthropic's
   30–50 figure is for a frontier model; a smaller one is almost certainly

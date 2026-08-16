@@ -1,6 +1,6 @@
 # Results
 
-Cost model: discovery=150, search_turn=True. `token-turns` is the sum, over every turn, of the schema tokens resident on that turn. `total tokens` adds the one-off discovery and re-search costs on top.
+Cost model: discovery=150, search_turn=True. `RTR` (Resident Token Rent) is the sum, over every turn, of the schema tokens resident on that turn. `total tokens` adds the one-off discovery, re-search and expected-failure costs on top. `opt gap` is the ratio to `rent-optimal`, the offline optimum for this objective.
 
 ### `alternating`
 

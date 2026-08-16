@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import math
+
 from .model import Workload
 from .simulator import Result
 
@@ -125,8 +127,6 @@ def scatter(
     series rather than as separate policies, because that is what it is: one
     curve, sampled.
     """
-    import math
-
     trace = trace or []
     allp = points + trace
     if not allp:

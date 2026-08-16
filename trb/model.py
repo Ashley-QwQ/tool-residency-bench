@@ -28,12 +28,22 @@ class Tool:
     which is what the v0.1 catalog uses throughout. It exists because the
     break-even idle gap is `D_i / S_i`, and pretending every tool shares one
     global `D` is a modelling choice, not a fact.
+
+    `failure_rate` is this tool's own probability that a reactivation fails.
+    `None` means "use the cost model's global rate". Per-tool rather than
+    global because retrieval failure is not a coin flip that the universe
+    re-tosses each time: a tool with a vague name and a thin description fails
+    to be re-found *every* time, and a well-named one essentially never does.
+    Modelling it as an i.i.d. global rate spreads that failure evenly over all
+    tools and hides the effect it actually has, which is to make a small
+    minority of tools individually too dangerous to evict at all.
     """
 
     id: str
     schema_tokens: int
     server: str = ""
     reactivation_tokens: int = 0
+    failure_rate: float | None = None
 
 
 @dataclass(frozen=True)
@@ -111,16 +121,28 @@ class CostModel:
     failure_rate: float = 0.0
     failure_penalty: int = 0
 
-    @property
-    def expected_failure_cost(self) -> int:
-        return int(self.failure_rate * self.failure_penalty)
+    def failure_rate_for(self, tool: Tool) -> float:
+        """`p_i` - this tool's own failure rate, or the global one."""
+        return self.failure_rate if tool.failure_rate is None else tool.failure_rate
+
+    def expected_failure_cost(self, tool: Tool) -> int:
+        return int(self.failure_rate_for(tool) * self.failure_penalty)
 
     def reactivation(self, tool: Tool) -> int:
-        """`D_i^eff` - the expected cost of bringing this tool back."""
+        """`D_i^eff` - the expected cost of bringing this tool back.
+
+        Per-tool failure rates enter here, which is what lets a policy treat
+        an unreliable tool differently from a reliable one of the same size:
+        a high `p_i` inflates `D_i`, which raises `g*_i = D_i / S_i`, which
+        makes the tool worth holding for longer. At a high enough `p_i` the
+        break-even gap exceeds any realistic trace length and the tool becomes
+        *effectively unevictable* - which is the correct answer, and one a
+        global failure rate cannot express.
+        """
         return (
             self.discovery_tokens
             + tool.reactivation_tokens
-            + self.expected_failure_cost
+            + self.expected_failure_cost(tool)
         )
 
     def label(self) -> str:
@@ -139,6 +161,7 @@ def load_catalog(path: str | Path) -> dict[str, Tool]:
             int(t["schema_tokens"]),
             t.get("server", ""),
             int(t.get("reactivation_tokens", 0)),
+            t["failure_rate"] if "failure_rate" in t else None,
         )
         for t in raw["tools"]
     }

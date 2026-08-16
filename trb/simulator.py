@@ -18,6 +18,7 @@ model's mood is not a measurement of a cache policy.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 
 from .model import CostModel, Workload
@@ -50,7 +51,12 @@ class Result:
     discovery_tokens: int = 0
     search_turn_tokens: int = 0
     failure_tokens: int = 0
-    failure_rate: float = 0.0  # copied from the cost model, for reporting
+    # Accumulated log(1 - p_i) over every reactivation. Kept in log space
+    # because per-tool rates mean the session survival probability is a
+    # product of differing terms rather than a single power, and because a
+    # few hundred reactivations underflow a naive product.
+    log_survival: float = 0.0
+    riskiest_reload: float = 0.0  # highest p_i actually reactivated
 
     series: list[int] = field(default_factory=list)  # resident tokens per turn
     count_series: list[int] = field(default_factory=list)
@@ -65,17 +71,18 @@ class Result:
     def session_success_prob(self) -> float:
         """Probability that no reactivation in this session failed.
 
+        With per-tool rates this is `prod over reactivations of (1 - p_i)`,
+        not `(1 - p)^R` - which matters, because the reactivations a policy
+        chooses are not a random sample of the catalog. A policy that happens
+        to evict only the reliable tools can reload far more often at the same
+        risk, and that is precisely the behaviour a residency policy should be
+        rewarded for.
+
         Only reloads count. Every on-demand policy pays the same first loads,
         so those are common exposure; what differs between policies - and what
-        eviction actually buys with - is the number of *re*-activations.
-
-        This decays geometrically while token cost grows linearly, which is
-        why the two rank policies differently and why aggressive eviction can
-        look excellent right up until it is unusable.
+        eviction actually spends - is the number of *re*-activations.
         """
-        if self.failure_rate <= 0:
-            return 1.0
-        return (1.0 - self.failure_rate) ** self.reloads
+        return math.exp(self.log_survival)
 
     @property
     def mean_resident_tokens(self) -> float:
@@ -95,7 +102,6 @@ class Result:
 def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Result:
     cost = cost or CostModel()
     res = Result(workload.name, policy.name, len(workload.steps))
-    res.failure_rate = cost.failure_rate
 
     resident: set[str] = set(policy.start(workload, cost))
     ever_loaded: set[str] = set()
@@ -127,7 +133,10 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
                 res.discovery_tokens += catalog[tool].reactivation_tokens
                 if tool in ever_loaded:
                     res.reloads += 1
-                    res.failure_tokens += cost.expected_failure_cost
+                    res.failure_tokens += cost.expected_failure_cost(catalog[tool])
+                    p = cost.failure_rate_for(catalog[tool])
+                    res.riskiest_reload = max(res.riskiest_reload, p)
+                    res.log_survival += math.log1p(-p) if p < 1.0 else -math.inf
                     if t - evicted_at.get(tool, -(10**9)) <= cost.premature_window:
                         res.premature_reloads += 1
                 ever_loaded.add(tool)
