@@ -200,15 +200,23 @@ class RentOptimal(Policy):
     and the optimum is a closed form rather than a search:
 
         after a use at turn t with the next use at turn n,
-        holding costs   S * (n - t - 1)   (rent for every idle turn)
-        dropping costs  D                 (one re-search)
-        so hold iff     S * (n - t - 1) <= D
+        holding costs   S_i * (n - t - 1)   (rent for every idle turn)
+        dropping costs  D_i                 (one reactivation)
+        so hold iff     S_i * (n - t - 1) <= D_i
 
-    Note what this says: the break-even idle gap is `D / S` turns, which for a
-    700-token schema and a 150-token search is *under one turn*. The rental
-    arithmetic really is that lopsided, and any reason to hold longer has to
-    come from somewhere the token model cannot see - latency, or the risk that
-    re-search fails.
+    Equivalently, each tool has its own **break-even idle gap**
+
+        g*_i = D_i / S_i
+
+    - hold it if the next use is nearer than that, drop it otherwise. Two
+    consequences worth stating out loud. First, a global "evict after 5 idle
+    turns" TTL is a crude approximation of a quantity that is genuinely
+    per-tool: a 150-token schema and an 1,810-token schema do not deserve the
+    same horizon even when reactivation costs the same. Second, at the v0.1
+    defaults (700-token schema, 150-token search) `g*` is *under one turn*.
+    The rental arithmetic really is that lopsided, and any reason to hold
+    longer has to come from somewhere the token model cannot see - latency, or
+    the risk that reactivation fails.
 
     Exactness: this is provably optimal when discovery is charged per tool
     load and there is no search-turn rent. Under the defaults both of those
@@ -223,15 +231,15 @@ class RentOptimal(Policy):
     def __init__(self) -> None:
         super().__init__()
         self._next: list[dict[str, int]] = []
-        self._discovery = 0
+        self._cost: CostModel | None = None
 
     def start(self, workload: Workload, cost: CostModel) -> set[str]:
         self._next = next_use_table(workload)
-        self._discovery = cost.discovery_tokens
+        self._cost = cost
         return set()
 
     def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
-        if t + 1 >= len(self._next):
+        if t + 1 >= len(self._next) or self._cost is None:
             return set()
         upcoming = self._next[t + 1]
         drop = set()
@@ -239,8 +247,9 @@ class RentOptimal(Policy):
             if x not in upcoming:
                 drop.add(x)
                 continue
+            tool = workload.catalog[x]
             idle = upcoming[x] - t - 1
-            if workload.catalog[x].schema_tokens * idle > self._discovery:
+            if tool.schema_tokens * idle > self._cost.reactivation(tool):
                 drop.add(x)
         return drop
 

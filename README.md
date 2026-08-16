@@ -113,11 +113,15 @@ for 100 idle turns costs 100,000 tokens; re-finding it costs a few hundred.
 That asymmetry is the whole subject of this repo, and it is why the headline
 metric is not "final context size" but:
 
-> **Resident Token-Turns (RTT)** — the sum, over every turn, of the schema
-> tokens resident on that turn. The area under the curve above.
+> **Resident Token Rent (RTR)** — the sum, over every turn, of the schema
+> tokens resident on that turn, measured in token-turns. The area under the
+> curve above.
+>
+> (Abbreviated RTR, not RTT. In a systems context RTT is round-trip time, and
+> "RTT fell 83%" would read as a latency claim.)
 
 Two sessions can end with identical context sizes while one of them paid rent
-on a dead tool for four hundred turns. Only RTT can tell them apart.
+on a dead tool for four hundred turns. Only RTR can tell them apart.
 
 ---
 
@@ -256,22 +260,41 @@ because eviction is virtuous, it is valuable because reactivation is costly
 and unreliable.** The crossover is real and sits around 1,000–5,000 tokens per
 re-search on these traces:
 
-```text
-long_tail, total tool tokens        python -m trb sweep -w long_tail
+`python -m trb sweep -w long_tail`, reported as **optimality gap** — each
+policy's total cost divided by the rent-optimal cost at that same reactivation
+price:
 
-| re-search cost | search-only |    ttl-20 |  no-cache | min-loads | rent-optimal |
-|            0   |   1,133,310 |   343,560 |   141,070 |   169,080 |       67,930 |
-|          150   |   1,135,110 |   345,360 |   155,920 |   170,880 |       82,780 |
-|        1,000   |   1,145,310 |   355,560 |   240,070 |   181,080 |      134,790 |
-|        5,000   |   1,193,310 |   403,560 |   636,070 |   229,080 |      223,640 |
-|       20,000   |   1,373,310 |   583,560 | 2,121,070 |   409,080 |      409,080 |  <- converged
-|      100,000   |   2,333,310 | 1,543,560 |10,041,070 | 1,369,080 |    1,369,080 |
+```text
+| D       | rent-optimal | search-only | ttl-20 | lru-8  | no-cache | min-loads |
+| 0       |       67,930 |      16.68x |  5.06x | 14.82x |    2.08x |     2.49x |
+| 150     |       82,780 |      13.71x |  4.17x | 12.19x |    1.88x |     2.06x |
+| 1,000   |      134,790 |       8.50x |  2.64x |  7.56x |    1.78x |     1.34x |
+| 5,000   |      223,640 |       5.34x |  1.80x |  4.77x |    2.84x |     1.02x |
+| 20,000  |      409,080 |       3.36x |  1.43x |  3.05x |    5.18x |   * 1.00x |
+| 100,000 |    1,369,080 |       1.70x |  1.13x |  1.61x |    7.33x |   * 1.00x |
 ```
 
-`no-cache` goes from best to 5x worse than the bound across that range without
-its code changing at all. Whether eviction pays is a property of the cost
-ratio, not of the policy — which is why a benchmark that reports a single
-number for that ratio is hiding the interesting part.
+`no-cache` goes from second-best to 7x worse than the bound without its code
+changing at all, while `min-loads` walks the other way and lands exactly on
+the optimum. Normalising against the optimum is what makes that structure
+visible: these are not rival policies scattered across a table, they are
+points on one continuum with two limits.
+
+```text
+D -> 0      optimum is evict-on-last-use     any idle turn costs more than
+                                             fetching the tool back
+D -> inf    optimum is min-loads             never pay to fetch twice
+```
+
+Classical miss minimisation is not a competing theory of this problem. It is
+the `D -> inf` regime of it. Real agents live in the middle, and closer to the
+left end than anyone schedules for.
+
+(One detail worth not glossing: `no-cache` does not reach 1.00x at `D = 0`,
+because it evicts a turn late — it keeps whatever was used most recently, so a
+dead tool rides along for one more request. That single turn of lag costs 2x
+on this trace. The `D -> 0` limit is "evict immediately on last use", which is
+what `rent-optimal` does there.)
 
 **6. The value of lifecycle management varies by orders of magnitude across
 workloads.** On `short`, `rent-optimal` saves 1,360 tokens against never
@@ -352,7 +375,23 @@ restorable — and nobody appears to be scheduling them specifically.
 
 ## Status
 
-v0.1. The simulator, seven traces, seven baselines, and the metric.
+**v0.1 — problem characterisation.** Frozen and tagged. It is a cost model and
+a benchmark, not a framework, and it is complete as that:
+
+```text
++ perfect oracle discovery, no LLM anywhere
++ 42-tool heterogeneous catalog (150-1,810 tokens per schema)
++ 7 workloads, 7 policies
++ Resident Token Rent as the metric
++ min-loads oracle    (miss-optimal)
++ rent-optimal oracle (rent-optimal, closed form)
++ reactivation-cost sweep, reported as optimality gap
++ stated falsification criteria
+```
+
+The point of tagging it rather than rolling straight on: v0.1 answers a
+question that stays answered. Whatever happens to v0.2, this is not a
+half-built thing.
 
 Explicitly **not** in this repo, and not by accident:
 
@@ -365,6 +404,10 @@ Explicitly **not** in this repo, and not by accident:
 Each of those is a variable that would make it impossible to attribute a
 result to the residency policy alone, which is the only thing v0.1 is trying
 to establish.
+
+**v0.2** prices imperfect retrieval; **v0.3** is the first online policy. In
+that order, because an adaptive policy tuned against a cost model that cannot
+charge for reactivation failure would be tuned against the wrong thing.
 
 The three things v0.2 should do, in order of how much they would sharpen the
 argument:

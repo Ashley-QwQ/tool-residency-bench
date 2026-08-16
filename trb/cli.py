@@ -65,29 +65,41 @@ def cmd_run(args) -> None:
 
 
 def cmd_sweep(args) -> None:
-    """Sweep the discovery cost and watch the ranking change.
+    """Sweep the reactivation cost and watch the policies change places.
 
-    The point: whether eviction pays is not a property of the policy, it is a
-    property of the ratio between schema size and re-search cost. A benchmark
-    that reports one number for that ratio is hiding the interesting part.
+    Reported as an **optimality gap** - each policy's cost divided by the
+    rent-optimal cost at that same reactivation price. That normalisation is
+    what makes the structure visible: the policies are not rivals scattered
+    across a table, they are points on one continuum with two limits.
+
+        D -> 0    the optimum is no-cache      (any idle turn costs more
+                  than getting the tool back)
+        D -> inf  the optimum is min-loads     (never pay to fetch twice)
+
+    Everything in between is selective residency, and real agents live there.
+    Classical miss minimisation is not a competing theory; it is the D -> inf
+    regime of this one.
     """
     workloads = _load(args.workload)
     costs = [int(x) for x in args.discovery_range.split(",")]
+    specs = args.policy or [
+        "search-only", "ttl-20", "lru-8", "no-cache", "min-loads",
+    ]
 
     for wl in workloads:
-        print(f"\n### {wl.name} - total tool tokens vs. cost of one re-search\n")
-        specs = args.policy or [
-            "search-only", "ttl-20", "no-cache", "min-loads", "rent-optimal",
-        ]
-        header = "| discovery cost | " + " | ".join(specs) + " | best |"
-        print(header)
+        print(f"\n### {wl.name} - optimality gap vs. cost of one reactivation\n")
+        print("| D | rent-optimal | " + " | ".join(specs) + " |")
         print("|" + "|".join("---" for _ in range(len(specs) + 2)) + "|")
         for d in costs:
             cost = CostModel(discovery_tokens=d, search_turn=not args.no_search_turn)
-            totals = {s: run(wl, pol.build(s), cost).total_tokens for s in specs}
-            best = min(totals, key=totals.get)
-            cells = " | ".join(f"{totals[s]:,}" for s in specs)
-            print(f"| {d:,} | {cells} | **{best}** |")
+            opt = run(wl, pol.RentOptimal(), cost).total_tokens
+            cells = []
+            for s in specs:
+                total = run(wl, pol.build(s), cost).total_tokens
+                ratio = total / opt if opt else float("inf")
+                cells.append(f"**{ratio:.2f}x**" if ratio < 1.005 else f"{ratio:.2f}x")
+            print(f"| {d:,} | {opt:,} | " + " | ".join(cells) + " |")
+        print("\nBold = matches the optimum at that reactivation price.")
 
 
 def main(argv=None) -> None:

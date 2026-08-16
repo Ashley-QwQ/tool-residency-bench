@@ -49,7 +49,7 @@ def test_search_only_never_exceeds_static():
     for wl in ALL:
         lazy = run(wl, pol.SearchOnly(), FREE)
         eager = run(wl, pol.Static(), FREE)
-        assert lazy.resident_token_turns <= eager.resident_token_turns
+        assert lazy.resident_token_rent <= eager.resident_token_rent
 
 
 def test_evicting_policies_are_subsets_of_search_only():
@@ -63,7 +63,7 @@ def test_evicting_policies_are_subsets_of_search_only():
         for p in (pol.TTL(5), pol.TTL(20), pol.LRU(8), pol.Oracle(16),
                   pol.NoCache(), pol.RentOptimal()):
             r = run(wl, p, FREE)
-            assert r.resident_token_turns <= base.resident_token_turns, (
+            assert r.resident_token_rent <= base.resident_token_rent, (
                 f"{wl.name}/{p.name} held more rent than never evicting"
             )
 

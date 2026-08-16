@@ -2,8 +2,9 @@
 
 This document states the problem the benchmark is built around, and argues
 that it is not already solved by (a) tool search, (b) context compaction, or
-(c) classical cache replacement. If you only want the numbers, read the
-[README](../README.md) instead.
+(c) classical, miss-minimising cache replacement — the last of which is a
+close relative rather than a stranger, and the difference is the interesting
+part. If you only want the numbers, read the [README](../README.md) instead.
 
 ## The pipeline everyone actually has
 
@@ -61,10 +62,76 @@ aggressive eviction, so anything holding a policy back has to be justified on
 some other axis, explicitly.
 
 This inequality is not an argument in prose — it is implemented, as
-`RentOptimal` in `trb/policies.py`. Because there is no capacity constraint,
-tools do not compete for slots, so the offline optimum decomposes per tool and
-per idle gap and has a closed form rather than requiring a search. A test
-asserts that no other policy in the suite ever beats it.
+`RentOptimal` in `trb/policies.py`, and it is exact.
+
+### Proposition (decomposition of the offline optimum)
+
+> Under unlimited capacity, perfect knowledge of future accesses, additive
+> per-turn schema residency cost, and deterministic per-tool reactivation
+> cost, the offline rent-optimal policy decomposes independently over each
+> tool's reuse intervals.
+
+*Proof.* Fix a tool `i` and one gap of `g` idle turns between consecutive
+uses. Any strategy either keeps the tool resident across the whole gap, for
+`S_i · g`, or drops it at some point and must reactivate by the next use. In
+the second case it pays `D_i` plus rent for however many idle turns it held on
+before dropping, so the cheapest member of that family is to drop immediately,
+for exactly `D_i`. Dropping and re-fetching more than once within a single gap
+only adds further `D_i` terms. The gap therefore costs `min(S_i · g, D_i)`.
+
+With no capacity constraint, tools never compete for a slot, so no tool's
+decision constrains any other's and the total separates into a sum of such
+independent terms. Minimising a sum of independent terms is minimising each
+term. ∎
+
+Hence, for on-demand policies,
+
+```
+C* = Σ_i Σ_{g ∈ gaps(i)} min(S_i · g,  D_i)   +   Σ_i [ S_i·uses(i) + D_i^first ]
+                                                  \_________________________/
+                                                   paid by every on-demand
+                                                   policy, so not a lever
+```
+
+and the per-tool decision rule is a threshold on the **break-even idle gap**:
+
+```
+g*_i = D_i / S_i        hold if the next use is nearer than g*_i, else drop
+```
+
+Three things follow that are worth stating separately, because each is a
+design consequence and not just algebra:
+
+1. **A global TTL is theoretically the wrong shape.** `g*` is per-tool. A
+   150-token schema and an 1,810-token schema do not deserve the same idle
+   horizon even when reactivation costs exactly the same. "Evict after 5 idle
+   turns" is a crude approximation of a quantity the system already knows.
+2. **`D` should be `D_i`.** Reactivation costs differ enormously in practice:
+   a local registry lookup is nearly free, a remote MCP round trip is not, an
+   embedding-plus-rerank search is not, and a permission-sensitive tool may
+   need capability renegotiation. Two 800-token tools with reload costs of 100
+   and 8,000 tokens have break-even gaps of 0.125 and 10 turns — the same
+   policy should treat them completely differently. `Tool.reactivation_tokens`
+   exists for this; the v0.1 catalog leaves it at zero everywhere so that this
+   degree of freedom does not quietly move the v0.1 numbers.
+3. **Reliability enters through the same door.** Once reactivation can fail,
+   the natural substitution is an *expected* cost,
+   `D_i^eff = D_i^search + p_i^fail · L_i^fail`, giving
+
+   ```
+   g*_i = (D_i^search + p_i^fail · L_i^fail) / S_i
+   ```
+
+   which turns "retrieval reliability sets the ceiling on eviction
+   aggressiveness" from an intuition into an equation. Nothing in v0.1
+   measures `p_i^fail`; that is the top item for v0.2.
+
+The practical value of having `C*` in closed form is that every online policy —
+TTL, LRU, adaptive, semantic lease, whatever comes later — can be reported as
+an **optimality gap** (`policy_cost / C*`) rather than against whichever
+heuristic happened to be in the table. A test asserts that no policy in the
+suite ever beats `rent-optimal`; if one ever did, the closed form above would
+be wrong.
 
 The full objective a real policy would have to minimise has one more term than
 either the 2012 rental model or this simulator:
@@ -78,12 +145,12 @@ either the 2012 rental model or this simulator:
 The third term is where the LLM-specific difficulty lives, and leaving it out
 is why the simulator currently rewards throwing everything away.
 
-This is a much more one-sided inequality than intuition suggests, and it is
-worth being precise about why the intuition fails. The instinctive question is
-*"might I need this tool again?"* — to which the answer is almost always
-"maybe, eventually." That question is not decision-relevant. The
-decision-relevant question is *"is re-finding it reliable enough to bet on?"*,
-which is a question about the retrieval system, not about the tool.
+It also explains why the instinctive question is the wrong one. Asked *"might
+I need this tool again?"*, the answer is almost always "maybe, eventually" —
+which decides nothing, because `g*_i` does not care whether a tool returns,
+only how far away the return is relative to `D_i / S_i`. The decision-relevant
+question is *"is re-finding it reliable enough to bet on?"*, which is a
+question about the retrieval system rather than about the tool.
 
 Which yields the one genuinely load-bearing coupling between the two halves:
 **retrieval reliability sets the ceiling on eviction aggressiveness.**
@@ -179,7 +246,7 @@ Context compaction is the standard answer to "the context is filling up", and
 it is a poor substitute for residency management on three counts:
 
 1. **It fires too late.** Compaction is triggered by pressure, near the limit.
-   Everything spent up to that point was already spent — RTT is an integral,
+   Everything spent up to that point was already spent — RTR is an integral,
    and you cannot reclaim area under a curve retroactively.
 2. **It targets the wrong thing.** Compaction drops tool *results* and
    summarises history. Tool *definitions* are typically structural and survive

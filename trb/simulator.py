@@ -30,8 +30,11 @@ class Result:
     policy: str
     turns: int
 
-    # The headline metric: sum over turns of resident schema tokens.
-    resident_token_turns: int = 0
+    # The headline metric: Resident Token Rent, in token-turns. Sum over every
+    # turn of the schema tokens resident on that turn. Abbreviated RTR, not
+    # RTT - in a systems context RTT means round-trip time, and "RTT fell 83%"
+    # would read as a latency claim.
+    resident_token_rent: int = 0
     peak_resident_tokens: int = 0
     peak_resident_count: int = 0
     final_resident_count: int = 0
@@ -53,11 +56,11 @@ class Result:
     @property
     def total_tokens(self) -> int:
         """Everything the tool layer costs over the whole session."""
-        return self.resident_token_turns + self.discovery_tokens + self.search_turn_tokens
+        return self.resident_token_rent + self.discovery_tokens + self.search_turn_tokens
 
     @property
     def mean_resident_tokens(self) -> float:
-        return self.resident_token_turns / self.turns if self.turns else 0.0
+        return self.resident_token_rent / self.turns if self.turns else 0.0
 
     @property
     def hit_rate(self) -> float:
@@ -91,6 +94,9 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
                 res.search_turn_tokens += workload.tokens(resident)
             for tool in missing:
                 res.loads += 1
+                # Per-tool surcharge on top of the shared round trip, for
+                # tools that are expensive to rehydrate specifically.
+                res.discovery_tokens += workload.catalog[tool].reactivation_tokens
                 if tool in ever_loaded:
                     res.reloads += 1
                     if t - evicted_at.get(tool, -(10**9)) <= cost.premature_window:
@@ -99,7 +105,7 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
                 resident.add(tool)
 
         rent = workload.tokens(resident)
-        res.resident_token_turns += rent
+        res.resident_token_rent += rent
         res.series.append(rent)
         res.count_series.append(len(resident))
         res.peak_resident_tokens = max(res.peak_resident_tokens, rent)

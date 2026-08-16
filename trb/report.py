@@ -7,7 +7,7 @@ from .simulator import Result
 
 COLUMNS = [
     ("policy", lambda r: r.policy),
-    ("token-turns", lambda r: f"{r.resident_token_turns:,}"),
+    ("RTR", lambda r: f"{r.resident_token_rent:,}"),
     ("mean", lambda r: f"{r.mean_resident_tokens:,.0f}"),
     ("peak", lambda r: f"{r.peak_resident_tokens:,}"),
     ("peak #", lambda r: str(r.peak_resident_count)),
@@ -16,11 +16,20 @@ COLUMNS = [
     ("thrash", lambda r: f"{r.thrash_rate:.0%}"),
     ("total tokens", lambda r: f"{r.total_tokens:,}"),
     ("vs search-only", lambda r: getattr(r, "_delta", "")),
+    ("opt gap", lambda r: getattr(r, "_gap", "")),
 ]
 
 
-def _annotate_delta(results: list[Result]) -> None:
+def _annotate(results: list[Result]) -> None:
+    """Two reference points per row: the shipped default, and the optimum.
+
+    `vs search-only` says how much a policy improves on what real systems do
+    today. `opt gap` says how much of the achievable win it actually captured,
+    which is the more demanding of the two and the one that stays meaningful
+    once every policy beats search-only.
+    """
     base = next((r for r in results if r.policy == "search-only"), None)
+    opt = next((r for r in results if r.policy == "rent-optimal"), None)
     for r in results:
         if base is None or base.total_tokens == 0:
             r._delta = ""
@@ -30,9 +39,16 @@ def _annotate_delta(results: list[Result]) -> None:
             pct = 100 * (r.total_tokens - base.total_tokens) / base.total_tokens
             r._delta = f"{pct:+.0f}%"
 
+        if opt is None or opt.total_tokens == 0:
+            r._gap = ""
+        elif r is opt:
+            r._gap = "1.00x"
+        else:
+            r._gap = f"{r.total_tokens / opt.total_tokens:.2f}x"
+
 
 def table(results: list[Result]) -> str:
-    _annotate_delta(results)
+    _annotate(results)
     head = "| " + " | ".join(c[0] for c in COLUMNS) + " |"
     rule = "|" + "|".join("---" for _ in COLUMNS) + "|"
     rows = ["| " + " | ".join(f(r) for _, f in COLUMNS) + " |" for r in results]
