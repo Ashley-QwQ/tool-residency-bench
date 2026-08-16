@@ -138,8 +138,10 @@ workload, with tables and curves.
 
 ```bash
 python -m trb run -w burst -p search-only -p ttl-5 -p min-loads -p rent-optimal
-python -m trb sweep -w long_tail
-python tests/test_simulator.py
+python -m trb sweep  -w long_tail     # optimality gap vs. reactivation price
+python -m trb pareto -w long_tail     # the trade-off with no price assumed
+python tests/test_simulator.py        # invariants
+python tests/test_optimality.py       # brute-force validation of the optimum
 ```
 
 `sweep` varies the cost of one re-search, because whether eviction pays is not
@@ -162,6 +164,13 @@ One turn:
 No LLM is involved anywhere, on purpose. A result that moves when a model
 changes its mind is not a measurement of a cache policy. Everything is
 deterministic and reproducible from a clean checkout.
+
+Exactly *when* each of those happens is load-bearing, not bookkeeping: whether
+eviction takes effect this turn or the next is the entire difference between
+`no-cache` and the aggressive end of the optimum, and it is worth 2x on
+`long_tail`. The convention is written down in
+[`docs/timing-model.md`](docs/timing-model.md) rather than left to be inferred
+from the code.
 
 ### Baselines
 
@@ -296,7 +305,39 @@ dead tool rides along for one more request. That single turn of lag costs 2x
 on this trace. The `D -> 0` limit is "evict immediately on last use", which is
 what `rent-optimal` does there.)
 
-**6. The value of lifecycle management varies by orders of magnitude across
+**6. No implementable baseline is on the Pareto frontier — on any workload.**
+Everything above prices a reactivation at some number of tokens, and a reader
+is entitled to disagree with that price. `python -m trb pareto` declines to
+choose one, plotting residency rent against reactivations directly:
+
+```text
+long_tail
+
+| policy        | reactivations | rent      | on frontier |
+| static        |             0 | 7,879,200 | dominated   |
+| search-only   |             0 | 1,091,910 | dominated   |
+| ttl-20        |             0 |   336,730 | dominated   |
+| ttl-5         |            14 |   197,530 | dominated   |
+| lru-8         |             0 |   969,320 | dominated   |
+| no-cache      |            87 |   104,500 | dominated   |
+| min-loads     |             0 |   162,250 | frontier    |
+| opt @ D=5,000 |             3 |   142,900 | frontier    |
+| opt @ D=1,000 |            25 |    90,010 | frontier    |
+| opt @ D=150   |            87 |    67,930 | frontier    |
+```
+
+A dominated policy is beaten on **both** axes at once, so no exchange rate
+between them can rescue it — this conclusion holds whatever anyone thinks `D`
+should be. Across all seven workloads, every implementable policy in the suite
+is dominated; the frontier is made entirely of offline bounds. `D` turns out
+not to decide who is good, only **where on the frontier** a deployment wants
+to sit.
+
+That reframes what a residency policy is even for. It is not "beat LRU." It is
+**get an online policy onto a frontier currently occupied only by policies
+that can see the future.**
+
+**7. The value of lifecycle management varies by orders of magnitude across
 workloads.** On `short`, `rent-optimal` saves 1,360 tokens against never
 evicting — less than the single `cloud_deploy` schema (1,810). On `long_mixed`
 the same policy saves 16.8M. Four orders of magnitude, same policy, same code.
@@ -327,9 +368,25 @@ Read these before quoting any number above.
   + reactivation cost     search tokens + latency            (partly modelled)
   + failure cost          P(retrieval fails) x penalty       (not modelled)
   ```
-- **Tokens only.** No wall-clock latency, no user-visible stalls, and no model
-  behaviour. In particular, the documented degradation of tool-selection
-  accuracy past 30–50 visible tools is *not* modelled — including it would
+- **RTR is logical context occupancy, not compute.** This is the caveat most
+  likely to be mistaken for a claim it is not making. **15M token-turns does
+  not mean 15M extra tokens were processed.** With prompt caching, KV reuse,
+  and cached-input pricing, a schema that is logically resident on every turn
+  is emphatically not re-prefilled on every turn. Three different axes get
+  conflated here routinely:
+
+  ```text
+  RTR                     logical residency pressure   <- the only one measured
+  compute rent            FLOPs, latency, API dollars  <- implementation-dependent
+  selection interference  wrong tool, bad arguments    <- model-dependent
+  ```
+
+  RTR bounds context headroom and is a necessary input to the other two, but
+  it is not a substitute for either. Anyone wanting latency or dollar figures
+  needs an execution model this repo does not have.
+
+- **No model behaviour at all.** The documented degradation of tool-selection
+  accuracy past 30–50 visible tools is not modelled; including it would
   penalise `static` and `search-only` considerably more than these numbers do.
 - **Prompt caching is not modelled.** In a real deployment an unchanged tool
   prefix can be cached, which lowers the effective cost of holding tools; the
@@ -386,6 +443,10 @@ a benchmark, not a framework, and it is complete as that:
 + min-loads oracle    (miss-optimal)
 + rent-optimal oracle (rent-optimal, closed form)
 + reactivation-cost sweep, reported as optimality gap
++ Pareto frontier, so nothing depends on one choice of price
++ the closed form validated against exhaustive enumeration of every
+  eviction schedule on small traces, plus metamorphic invariants
++ event semantics pinned down in docs/timing-model.md
 + stated falsification criteria
 ```
 

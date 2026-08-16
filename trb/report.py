@@ -91,6 +91,85 @@ def curve(results: list[Result], height: int = 12, width: int = 68) -> str:
     return "\n".join(lines)
 
 
+def pareto_front(points: list[tuple[str, int, int]]) -> set[str]:
+    """Names of the non-dominated points in (reactivations, rent) space.
+
+    A policy is dominated if another one is no worse on *both* axes and
+    strictly better on at least one. What survives is the set of genuine
+    operating points - the ones where buying less rent really does cost more
+    reactivations. Everything else is beaten outright and no choice of
+    exchange rate can rescue it.
+    """
+    front = set()
+    for name, x, y in points:
+        if not any(
+            (ox <= x and oy <= y) and (ox < x or oy < y)
+            for other, ox, oy in points
+            if other != name
+        ):
+            front.add(name)
+    return front
+
+
+def scatter(
+    points: list[tuple[str, int, int]],
+    trace: list[tuple[str, int, int]] | None = None,
+    height: int = 16,
+    width: int = 58,
+) -> str:
+    """Rent (log y) against reactivations (x).
+
+    Log y because the policies span two orders of magnitude and a linear axis
+    turns every interesting point into one row at the bottom. `trace` - the
+    optimum evaluated at a range of prices - is drawn as a single connected
+    series rather than as separate policies, because that is what it is: one
+    curve, sampled.
+    """
+    import math
+
+    trace = trace or []
+    allp = points + trace
+    if not allp:
+        return ""
+    marks = "abcdefghijklmnop"
+    xs = [p[1] for p in allp]
+    ys = [max(p[2], 1) for p in allp]
+    xmax = max(xs) or 1
+    lo, hi = math.log10(min(ys)), math.log10(max(ys))
+    span = (hi - lo) or 1.0
+
+    grid = [[" "] * width for _ in range(height)]
+
+    def place(x, y, ch):
+        col = int(x / xmax * (width - 1))
+        row = height - 1 - int((math.log10(max(y, 1)) - lo) / span * (height - 1))
+        row = min(max(row, 0), height - 1)
+        grid[row][col] = ch if grid[row][col] in (" ", ".") else "*"
+
+    for _, x, y in trace:
+        place(x, y, ".")
+    legend = []
+    for i, (name, x, y) in enumerate(points):
+        place(x, y, marks[i % len(marks)])
+        legend.append(f"{marks[i % len(marks)]}={name}")
+
+    lines = []
+    for i, row in enumerate(grid):
+        val = 10 ** (lo + span * (height - 1 - i) / (height - 1))
+        lines.append(f"{int(val):>11,} |" + "".join(row))
+    lines.append(" " * 12 + "+" + "-" * width)
+    lines.append(" " * 13 + f"0{'reactivations':^{width - 10}}{xmax}")
+    lines.append("")
+    lines.append("  rent, log scale.  " + "  ".join(legend[:4]))
+    for i in range(4, len(legend), 4):
+        lines.append("  " + " " * 17 + "  ".join(legend[i:i + 4]))
+    if trace:
+        lines.append("  . = the optimum at a range of reactivation prices "
+                     "(this is the frontier)")
+    lines.append("  * = overlapping points")
+    return "\n".join(lines)
+
+
 def workload_section(wl: Workload, results: list[Result], curve_for: list[str]) -> str:
     used = len(wl.used_tools())
     parts = [

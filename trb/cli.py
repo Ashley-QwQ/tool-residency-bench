@@ -12,7 +12,7 @@ from pathlib import Path
 
 from . import policies as pol
 from .model import CostModel, load_all, load_catalog, load_workload
-from .report import curve, table, workload_section
+from .report import curve, pareto_front, scatter, table, workload_section
 from .simulator import run
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -102,6 +102,58 @@ def cmd_sweep(args) -> None:
         print("\nBold = matches the optimum at that reactivation price.")
 
 
+def cmd_pareto(args) -> None:
+    """The trade-off itself, before any exchange rate is chosen.
+
+    `run` and `sweep` both reduce two quantities to one by picking a price for
+    a reactivation. That is a modelling choice, and a reader is entitled to
+    disagree with it. This command declines to make it: it plots residency
+    rent against reactivations directly and marks the Pareto frontier.
+
+    `D` then has no role except to say *where on the frontier* a given
+    deployment wants to sit. The claim the repo actually needs - that rent and
+    reactivations trade off against each other measurably, and that
+    `search-only` is not on the frontier at all on long traces - survives any
+    disagreement about the price.
+    """
+    workloads = _load(args.workload)
+    cost = CostModel(discovery_tokens=args.discovery,
+                     search_turn=not args.no_search_turn)
+    specs = args.policy or [
+        "static", "search-only", "ttl-20", "ttl-5", "lru-8", "no-cache",
+        "min-loads", "rent-optimal",
+    ]
+    trace = [int(x) for x in args.trace_discovery.split(",")] if args.trace_discovery else []
+
+    for wl in workloads:
+        points = []
+        for s in specs:
+            r = run(wl, pol.build(s), cost)
+            points.append((s, r.reloads, r.resident_token_rent))
+        # The optimum at a range of prices is one curve, sampled - it traces
+        # out the frontier rather than contributing separate policies.
+        curve_pts = []
+        for d in trace:
+            r = run(wl, pol.RentOptimal(),
+                    CostModel(discovery_tokens=d, search_turn=not args.no_search_turn))
+            curve_pts.append((f"opt@D={d:,}", r.reloads, r.resident_token_rent))
+
+        front = pareto_front(points + curve_pts)
+        print(f"\n### {wl.name} - residency rent vs. reactivations\n")
+        print("| policy | reactivations | rent (token-turns) | on frontier |")
+        print("|---|---|---|---|")
+        for name, x, y in points + curve_pts:
+            print(f"| {name} | {x:,} | {y:,} | {'**yes**' if name in front else 'dominated'} |")
+        dominated = [n for n, _, _ in points if n not in front]
+        print(f"\nDominated outright: {', '.join(dominated) if dominated else 'none'}. "
+              "A dominated policy cannot be rescued by any exchange rate between "
+              "the two axes - something else is cheaper on both.")
+        print()
+        print("```text")
+        print(scatter(points, curve_pts))
+        print("```")
+
+
 def main(argv=None) -> None:
     ap = argparse.ArgumentParser(prog="trb", description=__doc__)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -123,6 +175,14 @@ def main(argv=None) -> None:
     s = sub.add_parser("sweep", parents=[common], help="sweep the discovery cost")
     s.add_argument("--discovery-range", default="0,150,1000,5000,20000,100000")
     s.set_defaults(func=cmd_sweep)
+
+    p = sub.add_parser("pareto", parents=[common],
+                       help="rent vs. reactivations, with no exchange rate assumed")
+    p.add_argument("--discovery", type=int, default=150,
+                   help="only affects which point each policy lands on, not the axes")
+    p.add_argument("--trace-discovery", default="0,150,1000,5000,20000,100000",
+                   help="prices at which to place rent-optimal, tracing the frontier")
+    p.set_defaults(func=cmd_pareto)
 
     args = ap.parse_args(argv)
     args.func(args)
