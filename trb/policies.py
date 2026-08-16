@@ -11,7 +11,21 @@ from __future__ import annotations
 
 from typing import Iterable
 
-from .model import Workload
+from .model import CostModel, Workload
+
+
+def next_use_table(workload: Workload) -> list[dict[str, int]]:
+    """`table[t][tool]` = the first turn >= t at which `tool` is needed.
+
+    Only the offline policies use this. They are bounds, not proposals.
+    """
+    nxt: dict[str, int] = {}
+    table: list[dict[str, int]] = [{}] * len(workload.steps)
+    for t in range(len(workload.steps) - 1, -1, -1):
+        for tool in workload.steps[t].tools:
+            nxt[tool] = t
+        table[t] = dict(nxt)
+    return table
 
 
 class Policy:
@@ -19,7 +33,7 @@ class Policy:
 
     name = "policy"
 
-    def start(self, workload: Workload) -> set[str]:
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
         """Tools resident before turn 0. Free of charge (preconfigured)."""
         return set()
 
@@ -49,7 +63,7 @@ class Static(Policy):
 
     name = "static"
 
-    def start(self, workload: Workload) -> set[str]:
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
         return set(workload.catalog)
 
 
@@ -108,13 +122,21 @@ class LRU(Policy):
         return set(ranked[: len(resident) - self.capacity])
 
 
-class Oracle(Policy):
-    """Belady-style upper bound: evict what is not needed within H turns.
+# ---------------------------------------------------------------------------
+# Offline bounds. All three read the future of the trace, so none of them is
+# implementable in a real agent, and none is a proposal. They exist to answer
+# "how much is there to win, and under which objective", which has to be
+# settled before anyone builds a real policy. Keeping three of them apart
+# matters: they optimise *different things*, and conflating them is exactly
+# the mistake this repo is about.
+# ---------------------------------------------------------------------------
 
-    Cheats by reading the future of the trace. Not implementable in a real
-    agent - that is the point. It answers "how much room is there for a
-    smarter policy at all", which has to be checked before anyone spends
-    effort building one.
+
+class Oracle(Policy):
+    """Fixed-horizon lookahead: evict what is not needed within H turns.
+
+    A heuristic that happens to be given the future - not an optimum. H is an
+    arbitrary constant, and `rent-optimal` below beats it.
     """
 
     def __init__(self, horizon: int = 16) -> None:
@@ -123,20 +145,13 @@ class Oracle(Policy):
         self.name = f"oracle-{horizon}"
         self._next: list[dict[str, int]] = []
 
-    def start(self, workload: Workload) -> set[str]:
-        # next_use[t][tool] = first turn >= t at which tool is needed.
-        nxt: dict[str, int] = {}
-        table: list[dict[str, int]] = [dict()] * len(workload.steps)
-        for t in range(len(workload.steps) - 1, -1, -1):
-            for tool in workload.steps[t].tools:
-                nxt[tool] = t
-            table[t] = dict(nxt)
-        self._next = table
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
+        self._next = next_use_table(workload)
         return set()
 
     def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
         if t + 1 >= len(self._next):
-            return set()  # session is over; evicting now would cost nothing and save nothing
+            return set()  # session is over; evicting now saves nothing
         upcoming = self._next[t + 1]
         return {
             x
@@ -145,27 +160,29 @@ class Oracle(Policy):
         }
 
 
-class BeladyMin(Policy):
-    """True MIN: never evict anything that is ever needed again.
+class MinLoads(Policy):
+    """Belady's MIN: never evict anything that is ever needed again.
 
-    The theoretical floor for a policy that pays zero reload cost. Together
-    with oracle-H it brackets the achievable range.
+    Unbounded capacity, so it evicts eagerly the moment a tool has no future
+    use at all. That makes it **load-optimal**: every tool is loaded exactly
+    once, which is the minimum any policy can achieve. It is the best possible
+    policy under the classical objective.
+
+    It is *not* the best policy under this benchmark's objective, and it is
+    not close. That is the finding, not a defect: MIN minimises misses, and
+    misses are not what a context window charges for. Named `min-loads` rather
+    than `belady-min` so nobody reads it as "the omniscient optimum" - the
+    omniscient optimum for *this* objective is `rent-optimal`.
     """
 
-    name = "belady-min"
+    name = "min-loads"
 
     def __init__(self) -> None:
         super().__init__()
         self._next: list[dict[str, int]] = []
 
-    def start(self, workload: Workload) -> set[str]:
-        nxt: dict[str, int] = {}
-        table: list[dict[str, int]] = [dict()] * len(workload.steps)
-        for t in range(len(workload.steps) - 1, -1, -1):
-            for tool in workload.steps[t].tools:
-                nxt[tool] = t
-            table[t] = dict(nxt)
-        self._next = table
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
+        self._next = next_use_table(workload)
         return set()
 
     def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
@@ -175,8 +192,61 @@ class BeladyMin(Policy):
         return {x for x in resident if x not in upcoming}
 
 
+class RentOptimal(Policy):
+    """Offline optimum for the rental objective: rent + reactivation.
+
+    Unlike capacity-constrained caching, there is no capacity here - tools do
+    not compete for slots - so the decision decomposes per tool, per idle gap,
+    and the optimum is a closed form rather than a search:
+
+        after a use at turn t with the next use at turn n,
+        holding costs   S * (n - t - 1)   (rent for every idle turn)
+        dropping costs  D                 (one re-search)
+        so hold iff     S * (n - t - 1) <= D
+
+    Note what this says: the break-even idle gap is `D / S` turns, which for a
+    700-token schema and a 150-token search is *under one turn*. The rental
+    arithmetic really is that lopsided, and any reason to hold longer has to
+    come from somewhere the token model cannot see - latency, or the risk that
+    re-search fails.
+
+    Exactness: this is provably optimal when discovery is charged per tool
+    load and there is no search-turn rent. Under the defaults both of those
+    couple tools together - a turn that reloads two tools pays one search, and
+    a search turn pays rent on everything already resident - so with those on
+    it is a very tight bound rather than a proven optimum. Both couplings make
+    eviction *cheaper* than this rule assumes, so it errs toward holding.
+    """
+
+    name = "rent-optimal"
+
+    def __init__(self) -> None:
+        super().__init__()
+        self._next: list[dict[str, int]] = []
+        self._discovery = 0
+
+    def start(self, workload: Workload, cost: CostModel) -> set[str]:
+        self._next = next_use_table(workload)
+        self._discovery = cost.discovery_tokens
+        return set()
+
+    def evict(self, t: int, resident: set[str], workload: Workload) -> set[str]:
+        if t + 1 >= len(self._next):
+            return set()
+        upcoming = self._next[t + 1]
+        drop = set()
+        for x in resident:
+            if x not in upcoming:
+                drop.add(x)
+                continue
+            idle = upcoming[x] - t - 1
+            if workload.catalog[x].schema_tokens * idle > self._discovery:
+                drop.add(x)
+        return drop
+
+
 def default_policies() -> list[Policy]:
-    """The v1 baseline set, ordered from most to least conservative."""
+    """The v1 baseline set: implementable policies first, then the bounds."""
     return [
         Static(),
         SearchOnly(),
@@ -185,15 +255,19 @@ def default_policies() -> list[Policy]:
         LRU(8),
         NoCache(),
         Oracle(16),
-        BeladyMin(),
+        MinLoads(),
+        RentOptimal(),
     ]
 
 
 ALIASES = {
     "search-only": "search",
     "no-cache": "nocache",
-    "belady-min": "belady",
-    "min": "belady",
+    "min-loads": "minloads",
+    "belady-min": "minloads",
+    "belady": "minloads",
+    "rent-optimal": "rentoptimal",
+    "optimal": "rentoptimal",
 }
 
 
@@ -205,7 +279,8 @@ def build(spec: str) -> Policy:
         "static": lambda: Static(),
         "search": lambda: SearchOnly(),
         "nocache": lambda: NoCache(),
-        "belady": lambda: BeladyMin(),
+        "minloads": lambda: MinLoads(),
+        "rentoptimal": lambda: RentOptimal(),
         "ttl": lambda: TTL(int(arg or 10)),
         "lru": lambda: LRU(int(arg or 8)),
         "oracle": lambda: Oracle(int(arg or 16)),

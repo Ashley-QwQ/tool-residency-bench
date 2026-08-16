@@ -74,7 +74,7 @@ def run(workload: Workload, policy: Policy, cost: CostModel | None = None) -> Re
     cost = cost or CostModel()
     res = Result(workload.name, policy.name, len(workload.steps))
 
-    resident: set[str] = set(policy.start(workload))
+    resident: set[str] = set(policy.start(workload, cost))
     ever_loaded: set[str] = set()
     evicted_at: dict[str, int] = {}
 

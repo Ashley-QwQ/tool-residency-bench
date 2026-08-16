@@ -17,12 +17,13 @@ Two tools, strictly interleaved, 80 turns. The trap for eviction policies that a
 | lru-8 | 125,820 | 1,573 | 1,590 | 2 | 2 | 0 | 0% | 126,330 | +0% |
 | no-cache | 125,820 | 1,573 | 1,590 | 2 | 80 | 78 | 98% | 200,040 | +58% |
 | oracle-16 | 125,610 | 1,570 | 1,590 | 2 | 2 | 0 | 0% | 126,120 | -0% |
-| belady-min | 125,610 | 1,570 | 1,590 | 2 | 2 | 0 | 0% | 126,120 | -0% |
+| min-loads | 125,610 | 1,570 | 1,590 | 2 | 2 | 0 | 0% | 126,120 | -0% |
+| rent-optimal | 63,600 | 795 | 1,380 | 1 | 80 | 78 | 98% | 75,600 | -40% |
 
 ```text
   1,590 | ###################################################################
   1,445 |                                                                    
-  1,300 |                                                                    
+  1,300 | + + ++ + ++ + ++ + + ++ + ++ + ++ + + ++ + ++ + ++ + + ++ + ++ + ++
   1,156 |                                                                    
   1,011 |                                                                    
     867 |                                                                    
@@ -30,11 +31,11 @@ Two tools, strictly interleaved, 80 turns. The trap for eviction policies that a
     578 |                                                                    
     433 |                                                                    
     289 |                                                                    
-    144 |#                                                                   
+    144 |# + +  + +  + +  + + +  + +  + +  + + +  + +  + +  + + +  + +  + +  
       0 |                                                                    
         +--------------------------------------------------------------------
          0                            turn                            80
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -53,7 +54,8 @@ Grayscale 26 images, then post one, then search, then notify. The grayscale tool
 | lru-8 | 25,650 | 884 | 3,230 | 4 | 4 | 0 | 0% | 31,170 | +0% |
 | no-cache | 23,010 | 793 | 1,940 | 2 | 4 | 0 | 0% | 25,890 | -17% |
 | oracle-16 | 20,730 | 715 | 1,240 | 1 | 4 | 0 | 0% | 21,330 | -32% |
-| belady-min | 20,730 | 715 | 1,240 | 1 | 4 | 0 | 0% | 21,330 | -32% |
+| min-loads | 20,730 | 715 | 1,240 | 1 | 4 | 0 | 0% | 21,330 | -32% |
+| rent-optimal | 20,730 | 715 | 1,240 | 1 | 4 | 0 | 0% | 21,330 | -32% |
 
 ```text
   3,230 |                                                                  ##
@@ -70,7 +72,7 @@ Grayscale 26 images, then post one, then search, then notify. The grayscale tool
       0 |                                                                    
         +--------------------------------------------------------------------
          0                            turn                            29
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -89,7 +91,8 @@ A tool is used three times, sits idle for 100 turns, then is needed once more. '
 | lru-8 | 104,940 | 1,009 | 1,020 | 2 | 2 | 0 | 0% | 105,880 | +0% |
 | no-cache | 41,580 | 400 | 1,020 | 2 | 3 | 1 | 0% | 43,050 | -59% |
 | oracle-16 | 40,560 | 390 | 640 | 1 | 3 | 1 | 0% | 41,010 | -61% |
-| belady-min | 104,560 | 1,005 | 1,020 | 2 | 2 | 0 | 0% | 105,500 | -0% |
+| min-loads | 104,560 | 1,005 | 1,020 | 2 | 2 | 0 | 0% | 105,500 | -0% |
+| rent-optimal | 40,560 | 390 | 640 | 1 | 3 | 1 | 0% | 41,010 | -61% |
 
 ```text
   1,020 |  ##################################################################
@@ -106,7 +109,7 @@ A tool is used three times, sits idle for 100 turns, then is needed once more. '
       0 |                                                                    
         +--------------------------------------------------------------------
          0                            turn                            104
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -125,7 +128,8 @@ Roughly a thousand turns of realistic mixture: five recurring phases over eight 
 | lru-8 | 6,455,970 | 6,883 | 11,080 | 9 | 171 | 145 | 0% | 7,606,050 | -57% |
 | no-cache | 1,426,360 | 1,521 | 2,930 | 2 | 716 | 690 | 62% | 2,154,830 | -88% |
 | oracle-16 | 2,405,900 | 2,565 | 4,430 | 4 | 175 | 149 | 0% | 2,632,510 | -85% |
-| belady-min | 15,339,210 | 16,353 | 19,280 | 22 | 26 | 0 | 0% | 15,592,740 | -12% |
+| min-loads | 15,339,210 | 16,353 | 19,280 | 22 | 26 | 0 | 0% | 15,592,740 | -12% |
+| rent-optimal | 805,290 | 859 | 1,550 | 1 | 716 | 690 | 57% | 912,690 | -95% |
 
 ```text
  20,930 |                                                           #########
@@ -137,12 +141,12 @@ Roughly a thousand turns of realistic mixture: five recurring phases over eight 
   9,513 |                                                                 *  
   7,610 |   ## ***  ******    ****    *****   *****    ***     ****     ** * 
   5,708 |   * * o   o   o    *   o*  *oo o *    o  *   oo **   o o ***      *
-  3,805 |  #oooo+o**+ooo+o***oooo+o**o++o+o **+o ooo***++ooo***+o+o+o  *o+ooo
-  1,902 | #++ +  +oo      +oo+  +   o+    +ooo  ++   +o   + ooo   +   *o     
-      0 |#        +                o       +        +       +        o       
+  3,805 |  #oooo o** ooo o***oooo o**o  o o ** o ooo***  ooo*** o o o  *o ooo
+  1,902 | #       oo       oo       o      ooo        o     ooo       *o     
+      0 |#+++++++++++++++++++++++++o+++++++++++++++++++++++++++++++++o+++++++
         +--------------------------------------------------------------------
          0                            turn                            938
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -161,7 +165,8 @@ Two workhorse tools carry the task, interrupted every so often by a one-off spec
 | lru-8 | 969,320 | 4,039 | 7,730 | 9 | 12 | 0 | 0% | 1,008,700 | -11% |
 | no-cache | 104,500 | 435 | 1,830 | 2 | 99 | 87 | 74% | 155,920 | -86% |
 | oracle-16 | 154,080 | 642 | 2,260 | 3 | 13 | 1 | 0% | 162,640 | -86% |
-| belady-min | 162,250 | 676 | 2,260 | 3 | 12 | 0 | 0% | 170,880 | -85% |
+| min-loads | 162,250 | 676 | 2,260 | 3 | 12 | 0 | 0% | 170,880 | -85% |
+| rent-optimal | 67,930 | 283 | 1,620 | 1 | 99 | 87 | 72% | 82,780 | -93% |
 
 ```text
   9,710 |                                                                ####
@@ -174,11 +179,11 @@ Two workhorse tools carry the task, interrupted every so often by a one-off spec
   3,530 |                                                                    
   2,648 |                        ######                                      
   1,765 |          ##############      *******       *******             ****
-    882 |   #######********************o      *******       *************    
-      0 |###o++oooo ++oooo +ooooo +oooo ++oooo ++oooo ++oooo +ooooo +oooo ++o
+    882 |   #######********************o      *******+      *************+   
+      0 |###o++oooo+++oooo++ooooo++oooo ++oooo+++oooo ++oooo +ooooo++oooo ++o
         +--------------------------------------------------------------------
          0                            turn                            240
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -197,7 +202,8 @@ download -> process -> upload -> report, twelve turns each. The natural shape of
 | lru-8 | 214,660 | 4,472 | 8,580 | 8 | 8 | 0 | 0% | 243,480 | +0% |
 | no-cache | 60,640 | 1,263 | 2,570 | 2 | 8 | 0 | 0% | 69,090 | -72% |
 | oracle-16 | 53,390 | 1,112 | 1,550 | 1 | 8 | 0 | 0% | 54,590 | -78% |
-| belady-min | 53,390 | 1,112 | 1,550 | 1 | 8 | 0 | 0% | 54,590 | -78% |
+| min-loads | 53,390 | 1,112 | 1,550 | 1 | 8 | 0 | 0% | 54,590 | -78% |
+| rent-optimal | 53,390 | 1,112 | 1,550 | 1 | 8 | 0 | 0% | 54,590 | -78% |
 
 ```text
   8,580 |                                                            ########
@@ -214,7 +220,7 @@ download -> process -> upload -> report, twelve turns each. The natural shape of
       0 |         ++++++++                           +++++++                 
         +--------------------------------------------------------------------
          0                            turn                            48
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```
 
@@ -233,7 +239,8 @@ A two-tool errand. Nothing accumulates and nothing needs managing. This trace ex
 | lru-8 | 1,580 | 527 | 900 | 3 | 3 | 0 | 0% | 2,710 | +0% |
 | no-cache | 1,370 | 457 | 690 | 2 | 3 | 0 | 0% | 2,290 | -15% |
 | oracle-16 | 900 | 300 | 430 | 1 | 3 | 0 | 0% | 1,350 | -50% |
-| belady-min | 900 | 300 | 430 | 1 | 3 | 0 | 0% | 1,350 | -50% |
+| min-loads | 900 | 300 | 430 | 1 | 3 | 0 | 0% | 1,350 | -50% |
+| rent-optimal | 900 | 300 | 430 | 1 | 3 | 0 | 0% | 1,350 | -50% |
 
 ```text
     900 |                                              ######################
@@ -250,6 +257,6 @@ A two-tool errand. Nothing accumulates and nothing needs managing. This trace ex
       0 |                                                                    
         +--------------------------------------------------------------------
          0                            turn                            3
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
          (curves that coincide are drawn once, in legend order)
 ```

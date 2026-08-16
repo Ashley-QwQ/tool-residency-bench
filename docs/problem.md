@@ -60,11 +60,23 @@ mismatch is the point: the token model alone will always push toward
 aggressive eviction, so anything holding a policy back has to be justified on
 some other axis, explicitly.
 
-The same lopsidedness is why the sweep struggles to find a re-search price at
-which never evicting wins. Even at an absurd 100,000 tokens per re-search, a
-16-turn lookahead still edges out `search-only` on the 938-turn trace
-(20.1M vs 20.3M) — though at that price the margin is under 1%, and simple
-TTL policies have long since lost.
+This inequality is not an argument in prose — it is implemented, as
+`RentOptimal` in `trb/policies.py`. Because there is no capacity constraint,
+tools do not compete for slots, so the offline optimum decomposes per tool and
+per idle gap and has a closed form rather than requiring a search. A test
+asserts that no other policy in the suite ever beats it.
+
+The full objective a real policy would have to minimise has one more term than
+either the 2012 rental model or this simulator:
+
+```text
+  residency rent       schema_tokens x resident_turns    modelled here
++ reactivation cost    search tokens + latency           partly modelled
++ failure cost         P(retrieval fails) x penalty      not modelled
+```
+
+The third term is where the LLM-specific difficulty lives, and leaving it out
+is why the simulator currently rewards throwing everything away.
 
 This is a much more one-sided inequality than intuition suggests, and it is
 worth being precise about why the intuition fails. The instinctive question is
@@ -78,33 +90,63 @@ Which yields the one genuinely load-bearing coupling between the two halves:
 Improving discovery is not only a discovery improvement — it buys permission
 to evict harder.
 
-## Why this is not classical cache replacement
+## Which caching problem this actually is
 
-The simulator includes `belady-min`, the classical optimum: never evict
-anything that will be referenced again. It loses badly — 15.6M tokens against
-2.6M for a crude 16-turn lookahead on `long_mixed`.
+It is caching. The useful question is *which* caching problem, because the
+answer changes what "optimal" means.
 
-That is not a bug in the implementation. MIN is optimal for the problem it was
-designed for, where:
+The simulator ships both optima, deliberately:
 
-- capacity is fixed and scarce,
-- occupying a slot is free once you are in it,
-- and the only cost is a miss.
+- **`min-loads`** is Belady's MIN — never evict anything that will be
+  referenced again. With unbounded capacity it achieves the provably minimum
+  number of fetches: each tool loaded exactly once. It is the best possible
+  policy under the classical objective.
+- **`rent-optimal`** minimises rent plus reactivation.
 
-A context window inverts the second assumption. Occupancy is precisely what
-costs, and it costs *per turn*. So the objective is not "minimise misses
-subject to capacity" but "minimise `Σ_t Σ_{i ∈ resident(t)} schema_tokens_i`
-plus reload costs" — a rent-minimisation problem, not a hit-rate problem. The
-right analogy from systems is not the CPU cache. It is a garbage collector, or
-paging under memory *pressure* rather than a hard memory *limit*.
+On `long_mixed` they are 17x apart (15.6M vs 0.9M tokens), and both are
+omniscient. MIN is not handicapped in the implementation — that gap is
+entirely the objective function.
 
-Two consequences that a hit-rate framing would miss:
+MIN is optimal for the problem it was designed for, where capacity is fixed
+and scarce, occupying a slot is free once you are in it, and the only cost is
+a miss. A context window keeps the first and third and inverts the second:
+occupancy is precisely what costs, and it costs *per turn, in proportion to
+schema size*.
 
-- A tool that will definitely be used again in 200 turns should still be
-  evicted now. MIN cannot express this. Reuse *distance* matters, not reuse.
-- A large schema used occasionally can be worth evicting while a tiny schema
-  used at the same rate is not. Size belongs in the policy; hit rate alone
-  hides it.
+That variant is not new. Khare & Young's **"Caching with rental cost and
+zapping"** ([arXiv:1208.2724](https://arxiv.org/abs/1208.2724), 2012) defines
+caching in which each cached file incurs a rental cost per unit time, with the
+objective being retrieval cost plus rental cost. That is this problem's
+theoretical home, and the correct framing is therefore not "caching does not
+apply here" but:
+
+> Tool residency is **rental caching**, not capacity-constrained caching.
+
+Three things the 2012 model has no reason to contain, which a tool-residency
+policy has to:
+
+1. rent is **proportional to schema size**, not uniform per object;
+2. reactivation can **fail**, and a failure is not merely a delay;
+3. resident count independently degrades **tool-selection accuracy**, a cost
+   that lands on the model rather than on the token bill.
+
+The strongest evidence that this framing is right rather than merely
+convenient: sweep the re-search cost upward and `rent-optimal` walks
+continuously into `min-loads`, landing on it exactly (`long_tail`: both
+409,080 tokens at a re-search cost of 20,000). Classical MIN is the limiting
+case of the rental optimum as reactivation becomes infinitely expensive. The
+two are one family. Agents simply do not operate at that limit — they operate
+where holding is expensive and re-searching is cheap.
+
+Two consequences a hit-rate framing would miss:
+
+- A tool that will *definitely* be used again in 200 turns should still be
+  evicted now. MIN cannot express this. Reuse **distance** matters, not reuse.
+- A large schema used occasionally can be worth evicting while a small one at
+  the same access rate is not. Size belongs in the policy; hit rate hides it.
+
+The systems analogy is therefore not the CPU cache. It is a garbage collector,
+or paging under memory *pressure* rather than against a hard memory *limit*.
 
 ## Why frequency and recency are not enough
 

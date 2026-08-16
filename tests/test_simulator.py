@@ -60,19 +60,63 @@ def test_evicting_policies_are_subsets_of_search_only():
     """
     for wl in ALL:
         base = run(wl, pol.SearchOnly(), FREE)
-        for p in (pol.TTL(5), pol.TTL(20), pol.LRU(8), pol.Oracle(16), pol.NoCache()):
+        for p in (pol.TTL(5), pol.TTL(20), pol.LRU(8), pol.Oracle(16),
+                  pol.NoCache(), pol.RentOptimal()):
             r = run(wl, p, FREE)
             assert r.resident_token_turns <= base.resident_token_turns, (
                 f"{wl.name}/{p.name} held more rent than never evicting"
             )
 
 
-def test_belady_never_reloads():
-    """MIN only drops tools that are never needed again, so misses are cold."""
+def test_min_loads_is_load_optimal():
+    """MIN drops only what is never needed again, so it is provably
+
+    load-optimal: every tool is fetched exactly once, which no policy can
+    beat. It is the best possible policy under the classical miss-count
+    objective - which is the whole point of it losing on tokens.
+    """
     for wl in ALL:
-        r = run(wl, pol.BeladyMin(), FREE)
+        r = run(wl, pol.MinLoads(), FREE)
         assert r.reloads == 0, f"{wl.name}: MIN evicted something still needed"
         assert r.loads == len(wl.used_tools())
+        for p in pol.default_policies():
+            if isinstance(p, pol.Static):
+                continue  # loads nothing because it pre-pays for everything
+            assert run(wl, p, FREE).loads >= r.loads, "nothing can load less than MIN"
+
+
+def test_rent_optimal_dominates_every_other_policy():
+    """The offline optimum for *this* objective must not lose to anything.
+
+    This is the assertion that keeps the two optima honest. `min-loads` is
+    optimal for miss count; `rent-optimal` is optimal for rent + reactivation.
+    If a heuristic ever beat rent-optimal on total tokens, the closed form in
+    RentOptimal would be wrong.
+    """
+    for cost in (CostModel(), CostModel(discovery_tokens=1000), FREE):
+        for wl in ALL:
+            best = run(wl, pol.RentOptimal(), cost)
+            for p in pol.default_policies():
+                r = run(wl, p, cost)
+                assert r.total_tokens >= best.total_tokens, (
+                    f"{wl.name}: {p.name} beat rent-optimal "
+                    f"({r.total_tokens:,} < {best.total_tokens:,}) at {cost.label()}"
+                )
+
+
+def test_the_two_optima_optimise_different_things():
+    """The headline finding, asserted rather than asserted-in-prose.
+
+    Load-optimal is not rent-optimal, and on a long trace the gap is an order
+    of magnitude. If these two ever converged, the repo's central claim -
+    that residency is a rental problem and not a capacity problem - would be
+    empty.
+    """
+    wl = next(w for w in ALL if w.name == "long_mixed")
+    loads = run(wl, pol.MinLoads(), CostModel())
+    rent = run(wl, pol.RentOptimal(), CostModel())
+    assert loads.loads < rent.loads, "MIN should fetch less"
+    assert loads.total_tokens > 10 * rent.total_tokens, "and pay far more for it"
 
 
 def test_no_cache_thrashes_on_alternating():
@@ -107,7 +151,7 @@ def test_headroom_is_what_scales_with_task_length_not_policy_cleverness():
     def headroom(name: str) -> int:
         wl = next(w for w in ALL if w.name == name)
         base = run(wl, pol.SearchOnly(), CostModel())
-        best = run(wl, pol.Oracle(16), CostModel())
+        best = run(wl, pol.RentOptimal(), CostModel())
         return base.total_tokens - best.total_tokens
 
     short, long = headroom("short"), headroom("long_mixed")

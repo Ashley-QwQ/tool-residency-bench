@@ -22,7 +22,7 @@ RESULTS = ROOT / "results"
 # `static` is deliberately left out of the curves: it is a flat line at the
 # full catalog size and rescales the plot so hard that everything else becomes
 # unreadable. Its number is in the table.
-CURVE_POLICIES = ["search-only", "ttl-20", "ttl-5", "oracle-16"]
+CURVE_POLICIES = ["search-only", "ttl-20", "ttl-5", "rent-optimal"]
 
 
 def _load(names: list[str] | None):
@@ -77,7 +77,7 @@ def cmd_sweep(args) -> None:
     for wl in workloads:
         print(f"\n### {wl.name} - total tool tokens vs. cost of one re-search\n")
         specs = args.policy or [
-            "search-only", "ttl-20", "ttl-5", "no-cache", "oracle-16",
+            "search-only", "ttl-20", "no-cache", "min-loads", "rent-optimal",
         ]
         header = "| discovery cost | " + " | ".join(specs) + " | best |"
         print(header)

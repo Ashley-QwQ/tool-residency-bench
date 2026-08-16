@@ -32,11 +32,11 @@ the system is never wrong about which tool it needs.
   3,530 |                                                                    
   2,648 |                        ######                                      
   1,765 |          ##############      *******       *******             ****
-    882 |   #######********************o      *******       *************    
-      0 |###o++oooo ++oooo +ooooo +oooo ++oooo ++oooo ++oooo +ooooo +oooo ++o
+    882 |   #######********************o      *******+      *************+   
+      0 |###o++oooo+++oooo++ooooo++oooo ++oooo+++oooo ++oooo +ooooo++oooo ++o
         +--------------------------------------------------------------------
          0                            turn                            240
-         # search-only  * ttl-20  o ttl-5  + oracle-16
+         # search-only  * ttl-20  o ttl-5  + rent-optimal
 
          resident tool-schema tokens per turn
 ```
@@ -49,22 +49,52 @@ every request — to do work whose two workhorse tools total 640.
 
 ---
 
-## Why this is not just "add a cache"
+## This is caching — but not the caching objective you think
 
-The obvious reaction is that this is textbook cache replacement, so use LRU and
-move on. Two of the results below say otherwise:
+The obvious reaction is "textbook cache replacement, use LRU, move on." The
+right answer is: yes, it is caching, and that is why the benchmark ships
+Belady's MIN as a baseline. What it is not is the *classical* caching
+objective.
 
-- **Belady's MIN — the provably optimal cache policy — is not optimal here.**
-  On the long trace it costs **6x more** than a mediocre lookahead heuristic
-  (15.6M vs 2.6M token-turns). MIN never evicts anything that will be needed
-  again, which is correct when holding an entry is free and *capacity* is the
-  constraint. In a context window, holding is not free: every resident schema
-  is re-sent on every request. The binding constraint is **rent**, not
-  capacity, and that changes what optimal means.
-- **Bounding the number of resident tools barely helps.** `lru-8` saves 11% on
-  `long_tail` and exactly 0% on `phase_shift`, where a plain 20-turn working
-  set saves 70% and 19%. Capping the count does nothing when the count was
-  never the thing running up the bill.
+Classical replacement minimises **misses** under a **capacity** constraint.
+Occupying a slot is free once you are in it; you only decide who to throw out
+when you need room. A context window inverts that: there is no hard slot
+limit, and occupancy is exactly what costs, **every turn, forever, in
+proportion to schema size**.
+
+That variant has a name in the literature. Khare & Young's *Caching with
+rental cost and zapping* ([arXiv:1208.2724](https://arxiv.org/abs/1208.2724),
+2012) defines caching where each cached file incurs a rental cost per time
+unit and the objective is retrieval cost **plus** rental cost. Tool residency
+sits squarely in that family, with three LLM-specific additions the 2012 model
+has no reason to contain: rent is proportional to **schema size** rather than
+uniform, reactivation can **fail**, and resident count independently degrades
+**tool-selection accuracy**.
+
+So the claim is not "caching does not apply." It is:
+
+> **Tool residency is rental caching, not capacity-constrained caching, and
+> the two have different optima.**
+
+The benchmark demonstrates that rather than asserting it, by shipping both
+optima side by side:
+
+| bound | optimises | on `long_mixed` |
+|---|---|---|
+| `min-loads` (Belady's MIN) | miss count — provably load-optimal, 26 loads | 15,592,740 tokens |
+| `rent-optimal` | rent + reactivation, closed form | **912,690 tokens** |
+
+**17x apart, both omniscient.** `min-loads` is not handicapped: it has the
+whole future, unbounded capacity, and achieves the theoretical minimum number
+of fetches any policy can. It loses because it is optimising the wrong thing.
+
+And the two are not rivals — they are the same policy at different rents.
+Sweep the cost of one re-search upward and `rent-optimal` walks continuously
+into `min-loads`, landing on it exactly (`long_tail`, 409,080 tokens for both
+at a re-search cost of 20,000). Classical MIN is the limiting case of the
+rental optimum as reactivation becomes infinitely expensive. Real agents do
+not live at that limit; they live at the end of the curve where holding is
+expensive and re-searching is cheap, which is the end nobody schedules for.
 
 ---
 
@@ -103,7 +133,7 @@ Writes [`results/summary.md`](results/summary.md) — every policy against every
 workload, with tables and curves.
 
 ```bash
-python -m trb run -w burst -p search-only -p ttl-5 -p oracle-16
+python -m trb run -w burst -p search-only -p ttl-5 -p min-loads -p rent-optimal
 python -m trb sweep -w long_tail
 python tests/test_simulator.py
 ```
@@ -138,12 +168,23 @@ deterministic and reproducible from a clean checkout.
 | `ttl-N` | drop anything unused for N turns | Denning's working set (1968) |
 | `lru-N` | keep at most N tools | the reflex answer |
 | `no-cache` | drop everything not used this turn | maximally aggressive; the thrash control |
-| `oracle-N` | drop what is not needed within N turns | cheats; an upper bound on what any policy could win |
-| `belady-min` | never drop anything ever needed again | classical cache optimum — see above |
+| `oracle-N` | drop what is not needed within N turns | *offline heuristic* — arbitrary horizon, not an optimum |
+| `min-loads` | never drop anything ever needed again | Belady's MIN: **optimal for miss count** |
+| `rent-optimal` | drop iff `schema × idle turns > search cost` | **optimal for rent + reactivation** |
 
-`oracle-N` and `belady-min` read the future of the trace. They are not
-proposals. They exist to answer the question that has to come first: **is
-there enough headroom here to be worth anyone's effort?**
+The last three read the future of the trace, so none is implementable and none
+is a proposal. They exist to answer the question that has to come first: **is
+there enough headroom here to be worth anyone's effort, and under which
+objective?**
+
+`rent-optimal` is a closed form rather than a search, because without a
+capacity constraint the tools do not compete and the decision decomposes per
+tool, per idle gap. It is exactly optimal when discovery is charged per tool
+load with no search-turn rent; under the defaults, batched searches and
+search-turn rent couple tools together, so it is a very tight bound rather
+than a proven optimum — and both couplings make eviction cheaper than the rule
+assumes, so it errs toward holding. A test asserts no other policy ever beats
+it.
 
 ### Workloads
 
@@ -167,54 +208,82 @@ same order of magnitude Anthropic cites as typical for five MCP servers).
 Cost model: 150 tokens per search round trip, and a re-search costs one extra
 request. Full tables in [`results/summary.md`](results/summary.md).
 
-**1. Discovery precision does not bound residency growth.** On `long_tail`,
+**1. Miss-optimal caching does not optimise residency rent.** `min-loads` is
+Belady's MIN with unbounded capacity and full knowledge of the future. It
+achieves the provably minimum number of fetches — 26 loads on `long_mixed`,
+which nothing can beat — and costs **17x** what the rent-optimal offline
+policy costs on the same trace (15,592,740 vs 912,690 tokens). Both are
+omniscient. The gap is entirely the objective function. This is the finding
+that forces a reader to re-examine what is being optimised, rather than
+nodding along at "lazy loading accumulates."
+
+**2. Perfect discovery does not bound residency growth.** On `long_tail`,
 `search-only` has 100% retrieval precision by construction and still grows
 monotonically to 9,710 resident tokens per turn — 1.13M token-turns against
-162K for a lookahead policy on the same trace. **-86%** was left on the table
-by a system doing discovery perfectly.
+83K for the rent-optimal bound. **−93%** left on the table by a system doing
+discovery flawlessly.
 
-**2. Recency and frequency point the wrong way at phase boundaries.** In
-`burst`, the grayscale tool is the most recently *and* most frequently used
-tool in the trace at the exact moment it becomes dead weight. `ttl-5`,
-`ttl-20` and `lru-8` all save literally nothing there (`+0%`); the phase
-boundary is a semantic event, and no access-history statistic can see it.
-
-**3. The classical cache optimum is the wrong optimum.** `belady-min` costs
-15.6M tokens on `long_mixed` where `oracle-16` costs 2.6M. Optimality under
-"capacity is scarce" is not optimality under "everything resident is re-sent
-every turn."
-
-**4. Capping tool count is the wrong knob for tokens.** `lru-8`: −11% on
-`long_tail`, 0% on `phase_shift`. `ttl-20` on the same traces: −70% and −19%.
-(Tool *count* still matters for a different reason — selection accuracy
-degrades past 30–50 visible tools — but that is not what RTT measures, and the
-two should not be conflated.)
-
-**5. Aggressive eviction is only free while re-search is free.** `no-cache` is
-the cheapest policy on `long_mixed` at a discovery cost of 150 tokens, and the
-second most expensive at 20,000. It reloads on 62–74% of its loads. The
-crossover is real and sits at a discovery cost of roughly 1,000–5,000 tokens
-on these traces:
+**3. A resident-count cap is not, by itself, a residency-cost policy.**
+`lru-8`: −11% on `long_tail`, 0% on `phase_shift`. `ttl-20` on the same
+traces: −70% and −19%. A count cap only acts when the count is the thing that
+is high; a phase needing 4–6 tools never trips `max_resident=8`, so dead tools
+lie around comfortably until the task ends. This does not mean count is
+irrelevant — it means **there are two budgets, and one policy cannot serve
+both**:
 
 ```text
-long_tail, total tool tokens
-
-| re-search cost |  search-only |    ttl-20 |  no-cache | oracle-16 | best       |
-|            0   |    1,133,310 |   343,560 |   141,070 |   160,690 | no-cache   |
-|          150   |    1,135,110 |   345,360 |   155,920 |   162,640 | no-cache   |
-|        1,000   |    1,145,310 |   355,560 |   240,070 |   173,690 | oracle-16  |
-|        5,000   |    1,193,310 |   403,560 |   636,070 |   225,690 | oracle-16  |
-|      100,000   |    2,333,310 | 1,543,560 | 10,041,070| 1,460,690 | oracle-16  |
+Residency budget   resident schema token-rent      <- what this repo measures
+Selection budget   resident count / ambiguity      <- the 30-50 tool accuracy ceiling
 ```
 
-**6. Short tasks have no headroom, and that is measurable rather than
-predictable.** On `short`, a clairvoyant policy saves 1,360 tokens against
-never evicting — less than one tool schema. On `long_mixed` the same policy
-saves 15.1M, four orders of magnitude more. So the question "should lifecycle
-management run at all?" should be gated on **observed headroom**, not on a
-prediction of how long the task will be. (Predicting task length is
-unreliable in the direction that matters: "fix a typo" routinely becomes
-forty turns.)
+They are not even in the same units. 8 tools is a very coarse instrument for
+a catalog whose schemas run from 150 to 1,810 tokens.
+
+**4. Recency and frequency point the wrong way at phase boundaries.** In
+`burst`, the grayscale tool is the most recently *and* most frequently used
+tool in the trace at the exact moment it becomes dead weight. `ttl-5`,
+`ttl-20` and `lru-8` all save literally nothing there (`+0%`). The phase
+boundary is a semantic event; no access-history statistic can see it.
+
+**5. Without pricing reactivation, aggressive eviction looks artificially
+optimal.** In this model eviction is free, re-search is cheap and flat, and
+retrieval never fails — so of course the model endorses "use it and throw it
+away." `no-cache` is the cheapest implementable policy on `long_mixed` at a
+discovery cost of 150 tokens and the second most expensive at 20,000, while
+reloading on 62–74% of its loads. Read the right way round, this is
+informative rather than embarrassing: **residency management is not valuable
+because eviction is virtuous, it is valuable because reactivation is costly
+and unreliable.** The crossover is real and sits around 1,000–5,000 tokens per
+re-search on these traces:
+
+```text
+long_tail, total tool tokens        python -m trb sweep -w long_tail
+
+| re-search cost | search-only |    ttl-20 |  no-cache | min-loads | rent-optimal |
+|            0   |   1,133,310 |   343,560 |   141,070 |   169,080 |       67,930 |
+|          150   |   1,135,110 |   345,360 |   155,920 |   170,880 |       82,780 |
+|        1,000   |   1,145,310 |   355,560 |   240,070 |   181,080 |      134,790 |
+|        5,000   |   1,193,310 |   403,560 |   636,070 |   229,080 |      223,640 |
+|       20,000   |   1,373,310 |   583,560 | 2,121,070 |   409,080 |      409,080 |  <- converged
+|      100,000   |   2,333,310 | 1,543,560 |10,041,070 | 1,369,080 |    1,369,080 |
+```
+
+`no-cache` goes from best to 5x worse than the bound across that range without
+its code changing at all. Whether eviction pays is a property of the cost
+ratio, not of the policy — which is why a benchmark that reports a single
+number for that ratio is hiding the interesting part.
+
+**6. The value of lifecycle management varies by orders of magnitude across
+workloads.** On `short`, `rent-optimal` saves 1,360 tokens against never
+evicting — less than the single `cloud_deploy` schema (1,810). On `long_mixed`
+the same policy saves 16.8M. Four orders of magnitude, same policy, same code.
+
+This motivates **pressure-based gating**: the benefit of managing residency is
+directly observable from accumulated residency cost, whereas remaining task
+length has to be predicted. It does not by itself prove observed pressure is a
+*better* gate than predicted length — that needs a gating benchmark that holds
+prediction accuracy fixed and compares the two triggers, which this repo does
+not contain.
 
 ---
 
@@ -222,11 +291,19 @@ forty turns.)
 
 Read these before quoting any number above.
 
-- **Discovery is a perfect oracle.** Real re-search can return nothing, or the
-  wrong thing. That risk is not priced anywhere in this model, and it is the
-  single biggest reason `no-cache`'s token win must **not** be read as a
-  recommendation. Retrieval reliability is what actually bounds how
-  aggressively a real system can evict.
+- **Discovery is a perfect oracle, and reactivation never fails.** Real
+  re-search can return nothing, or the wrong thing. That risk is priced
+  nowhere in this model, and it is the single biggest reason `no-cache`'s
+  token win must **not** be read as a recommendation. See finding 5: the
+  model endorses aggressive eviction because the model does not charge for
+  the thing that makes aggressive eviction dangerous. The full objective a
+  real policy should be minimising is
+
+  ```text
+  residency rent          schema_tokens x resident_turns     (modelled here)
+  + reactivation cost     search tokens + latency            (partly modelled)
+  + failure cost          P(retrieval fails) x penalty       (not modelled)
+  ```
 - **Tokens only.** No wall-clock latency, no user-visible stalls, and no model
   behaviour. In particular, the documented degradation of tool-selection
   accuracy past 30–50 visible tools is *not* modelled — including it would
@@ -252,6 +329,7 @@ Discovery is crowded. Residency is not.
 
 | work | discovery | residency |
 |---|---|---|
+| [Caching with rental cost and zapping (1208.2724)](https://arxiv.org/abs/1208.2724) | — | **the theoretical home.** Caching where each cached file pays rent per time unit; objective is retrieval + rental cost. Predates LLM agents by a decade and describes their tool context better than classical replacement does |
 | [Anthropic tool search](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-search-tool) | BM25 / regex over the catalog, `defer_loading` | none — the docs state discovered tools are re-expanded throughout history so Claude can reuse them "without re-searching" |
 | [Anthropic mid-conversation tool changes](https://platform.claude.com/docs/en/agents-and-tools/tool-use/tool-use-with-prompt-caching) | — | `tool_addition` / `tool_removal` blocks: the eviction **primitive** exists and is cache-safe. No policy ships with it |
 | [MCP-Zero (2506.01056)](https://arxiv.org/abs/2506.01056) | active tool request + hierarchical semantic routing | not addressed |
@@ -286,10 +364,25 @@ Explicitly **not** in this repo, and not by accident:
 
 Each of those is a variable that would make it impossible to attribute a
 result to the residency policy alone, which is the only thing v0.1 is trying
-to establish. The natural v0.2 is a phase-aware policy measured against
-`oracle-16` on these same traces, and a measurement of where tool-call error
-rate actually starts climbing for a small local model — the number that would
-turn finding 4's parenthetical into a second axis.
+to establish.
+
+The three things v0.2 should do, in order of how much they would sharpen the
+argument:
+
+1. **Price reactivation failure and draw the phase diagram.** Degrade oracle
+   discovery from 100% to 99 / 95 / 90%, give a miss a controllable penalty,
+   and plot re-search cost against failure rate. `no-cache`'s advantage should
+   collapse somewhere on that surface, and the optimal policy should migrate
+   `no-cache → ttl → conservative residency` as you move across it. That turns
+   "retrieval reliability sets the ceiling on eviction aggressiveness" from a
+   sentence into a figure.
+2. **Measure the selection budget.** Find where tool-call error rate actually
+   starts climbing for an 8B–30B local model as resident tool count grows.
+   Anthropic's 30–50 figure is for a frontier model; a smaller one is almost
+   certainly lower, and it is directly measurable rather than assumable by
+   analogy. That number turns finding 3's second budget into a real axis.
+3. **A phase-aware policy**, measured against `rent-optimal` on these traces.
+   `Step.phase` is already in every trace and read by nothing.
 
 Issues and traces that break the baselines are very welcome. A trace where
 `search-only` is genuinely the right answer would be the most useful
